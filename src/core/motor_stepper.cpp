@@ -25,7 +25,8 @@ MotorStepper::MotorStepper(const MotorStepperConfig& config)
     , targetSpeed_(0)
     , currentSpeed_(0)
     , lastStepTime_(0)
-    , stepInterval_(0) {
+    , stepInterval_(0)
+    , lastDirection_(true) {
 }
 
 // =============================================================================
@@ -49,6 +50,9 @@ bool MotorStepper::init() {
                   cfg_.driverType == StepperDriverType::TMC2209 ? "TMC2209" :
                   cfg_.driverType == StepperDriverType::A4988 ? "A4988" : "DRV8825",
                   cfg_.microstepping);
+    
+    // Initialize timing to current time to prevent burst on first motion
+    lastStepTime_ = micros();
     
     return true;
 }
@@ -123,10 +127,22 @@ void MotorStepper::update(float dtSec) {
     
     calculateStepInterval();
     
+    // Generate all pending steps (may be multiple per update at high speeds)
+    // Limit iterations to prevent infinite loop if timing is off
     unsigned long now = micros();
-    if (stepInterval_ > 0 && (now - lastStepTime_) >= stepInterval_) {
+    int stepsThisUpdate = 0;
+    const int maxStepsPerUpdate = 200;  // Safety limit
+    
+    while (stepInterval_ > 0 && (now - lastStepTime_) >= stepInterval_) {
         generateStep();
-        lastStepTime_ = now;
+        lastStepTime_ += stepInterval_;  // Increment by interval, not current time
+        stepsThisUpdate++;
+        
+        if (stepsThisUpdate >= maxStepsPerUpdate) {
+            // Prevent runaway - reset timing
+            lastStepTime_ = now;
+            break;
+        }
     }
 }
 
@@ -201,9 +217,12 @@ void MotorStepper::calculateStepInterval() {
 }
 
 void MotorStepper::generateStep() {
-    // Set direction via MCP23017
+    // Set direction via MCP23017 (only if changed - saves I2C bandwidth)
     bool forward = (currentSpeed_ >= 0) ? (cfg_.direction > 0) : (cfg_.direction < 0);
-    stepperSetDirection(cfg_.index, forward);
+    if (forward != lastDirection_) {
+        stepperSetDirection(cfg_.index, forward);
+        lastDirection_ = forward;
+    }
     
     // Generate step pulse via MCP23017
     stepperPulse(cfg_.index);

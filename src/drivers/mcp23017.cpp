@@ -70,9 +70,11 @@ bool MCP23017::init() {
     
     // Initialize outputs to safe state
     if (addr_ == MCP23017_STEPPER_ADDR) {
-        // Stepper controller: Enable = HIGH (disabled), PDN = HIGH (not powered down)
-        // Start with all steppers disabled for safety
-        portA_ = STPR_ALL_EN_BIT | STPR_ALL_PDN_BIT;  // EN=1 (disabled), PDN=1 (not powered down)
+        // TMC2209 Stepper controller:
+        //   EN = LOW (enabled - active LOW)
+        //   PDN = HIGH (standalone STEP/DIR mode, not UART mode)
+        //   SPREAD = LOW (StealthChop mode)
+        portA_ = STPR_ALL_PDN_BIT;  // EN=0 (enabled), PDN=1 (standalone mode)
         portB_ = 0x00;
     } else {
         // DC motor controller: All outputs low

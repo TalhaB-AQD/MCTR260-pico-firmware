@@ -29,7 +29,7 @@
 // #define MOTOR_DRIVER_L298N        // Dual H-bridge with enable pins
 
 // Stepper drivers (uncomment ONE if using steppers)
-// #define STEPPER_DRIVER_TMC2209    // Step/dir control, optional UART (DISABLED: MCP23017 not responding)
+#define STEPPER_DRIVER_TMC2209    // Step/dir control via MCP23017 @ 0x20
 // #define STEPPER_DRIVER_A4988     // Step/dir, basic driver
 // #define STEPPER_DRIVER_DRV8825   // Step/dir, up to 1/32 microstepping
 
@@ -152,7 +152,7 @@
 #define STEPPER_STEPS_PER_REV   200
 
 // Microstepping divisor (1, 2, 4, 8, 16, 32)
-#define STEPPER_MICROSTEPPING   16
+#define STEPPER_MICROSTEPPING   8
 
 // Maximum step rate (steps per second)
 #define STEPPER_MAX_SPEED       4000.0f

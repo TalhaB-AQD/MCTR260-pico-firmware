@@ -123,6 +123,7 @@ private:
     // Step timing
     unsigned long lastStepTime_;    // Last step timestamp (microseconds)
     unsigned long stepInterval_;    // Current step interval (microseconds)
+    bool lastDirection_;            // Cached direction to avoid redundant I2C writes
     
     // Internal methods
     void calculateStepInterval();

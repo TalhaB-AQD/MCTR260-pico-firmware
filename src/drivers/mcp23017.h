@@ -101,7 +101,7 @@
 #define STPR_ALL_MS1_BIT    (1 << 4)    // GPA4
 #define STPR_ALL_MS2_BIT    (1 << 5)    // GPA5
 #define STPR_ALL_SPRD_BIT   (1 << 6)    // GPA6 - SpreadCycle
-#define STPR_ALL_PDN_BIT    (1 << 7)    // GPA7 - Power Down (Active LOW)
+#define STPR_ALL_PDN_BIT    (1 << 7)    // GPA7 - PDN_UART: HIGH=Standalone STEP/DIR, LOW=UART mode
 
 // =============================================================================
 // U6_2 DC MOTOR & LED PIN MASKS (MCP23017 @ 0x21)
