@@ -187,14 +187,18 @@ void setup() {
     if (motorsOk) {
         Serial.println("[Core0] Configuring steppers...");
         
-        // Configure: spread=0, ms1=0, ms2=1 (1/4 step)
-        mcpStepper.setBitA(STPR_ALL_SPRD_BIT, false);  // StealthChop
-        mcpStepper.setBitA(STPR_ALL_MS1_BIT, false);   // MS1=0
-        mcpStepper.setBitA(STPR_ALL_MS2_BIT, true);    // MS2=1 = 1/4 microstep
+        // TMC2209 Microstepping (standalone mode):
+        //   MS1=0, MS2=0: 8 microsteps
+        //   MS1=1, MS2=1: 16 microsteps (smoother but slower)
+        //   MS1=1, MS2=0: 32 microsteps
+        //   MS1=0, MS2=1: 64 microsteps
+        mcpStepper.setBitA(STPR_ALL_SPRD_BIT, false);  // StealthChop (quiet)
+        mcpStepper.setBitA(STPR_ALL_MS1_BIT, true);    // MS1=1
+        mcpStepper.setBitA(STPR_ALL_MS2_BIT, true);    // MS2=1 = 16 microsteps
         mcpStepper.setBitA(STPR_ALL_PDN_BIT, true);    // PDN=1 for standalone mode
         mcpStepper.setBitA(STPR_ALL_EN_BIT, false);    // EN=0 (enabled)
         
-        Serial.println("[Core0] Steppers configured");
+        Serial.println("[Core0] Steppers: 16 microsteps, StealthChop");
     }
 #endif
     

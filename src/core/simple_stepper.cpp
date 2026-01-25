@@ -78,7 +78,8 @@ void simple_stepper_update() {
         float speed = motors[i].targetSpeed;
         float absSpeed = fabsf(speed);
         
-        if (absSpeed < 1.0f) {
+        // Ignore very low speeds (deadzone to prevent jitter from floating point noise)
+        if (absSpeed < 10.0f) {
             motors[i].accumulator = 0;
             continue;
         }
@@ -127,13 +128,14 @@ void simple_stepper_update() {
         mcpStepper.setPortB(dirMask);
     }
     
-    // Periodic diagnostics (every 10 seconds - reduced frequency)
-    if (millis() - lastDiagTime >= 10000) {
-        Serial.printf("[Diag] updates=%lu steps=%lu maxLoop=%luus\n",
-            updateCount, stepCount, maxLoopTime);
-        lastDiagTime = millis();
-        maxLoopTime = 0;
-    }
+    // Periodic diagnostics DISABLED on Core 1 - causes jitter
+    // Enable only for debugging, then re-disable
+    // if (millis() - lastDiagTime >= 10000) {
+    //     Serial.printf("[Diag] updates=%lu steps=%lu maxLoop=%luus\n",
+    //         updateCount, stepCount, maxLoopTime);
+    //     lastDiagTime = millis();
+    //     maxLoopTime = 0;
+    // }
 }
 
 void simple_stepper_stop_all() {

@@ -45,13 +45,13 @@
 // =============================================================================
 
 // Wheel radius in millimeters
-#define WHEEL_RADIUS_MM         48.0f
+#define WHEEL_RADIUS_MM        50.0f
 
 // Distance from center to front/back axle (half of wheelbase)
-#define WHEELBASE_HALF_MM       75.0f
+#define WHEELBASE_HALF_MM       100.0f
 
 // Distance from center to left/right wheel (half of track width)
-#define TRACK_WIDTH_HALF_MM     80.0f
+#define TRACK_WIDTH_HALF_MM     100.0f
 
 // Dead zone: joystick values below this are treated as zero (0-100 scale)
 #define MOTOR_DEADZONE          5.0f
@@ -152,7 +152,7 @@
 #define STEPPER_STEPS_PER_REV   200
 
 // Microstepping divisor (1, 2, 4, 8, 16, 32)
-#define STEPPER_MICROSTEPPING   8
+#define STEPPER_MICROSTEPPING   16
 
 // Maximum step rate (steps per second)
 #define STEPPER_MAX_SPEED       4000.0f
