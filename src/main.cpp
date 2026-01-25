@@ -2,12 +2,15 @@
  * @file main.cpp
  * @brief Main Entry Point for Raspberry Pi Pico W Robot Controller
  *
- * This firmware enables BLE control of a mecanum wheel robot
- * using the RC Controller Flutter app.
+ * MULTICORE ARCHITECTURE:
+ * - Core 0: BLE (BTstack), command parsing, kinematics
+ * - Core 1: Dedicated stepper pulse generation (500µs timing)
+ * - Inter-core: Mutex-protected shared memory for speed commands
  */
 
 #include <Arduino.h>
 #include <Wire.h>
+#include "pico/mutex.h"
 
 // Project configuration
 #include "project_config.h"
@@ -17,24 +20,77 @@
 #include "core/command_parser.h"
 #include "core/motor_manager.h"
 #include "core/safety.h"
+#include "core/simple_stepper.h"
 #include "drivers/mcp23017.h"
 
 // Profiles
 #include "profiles/profile_mecanum.h"
 
 // =============================================================================
-// GLOBAL STATE
+// INTER-CORE COMMUNICATION (shared between Core 0 and Core 1)
+// =============================================================================
+
+// Mutex for thread-safe access to shared speed data
+mutex_t g_speedMutex;
+
+// Shared speed commands (written by Core 0, read by Core 1)
+volatile float g_targetSpeeds[4] = {0, 0, 0, 0};
+volatile bool g_speedsUpdated = false;
+volatile bool g_emergencyStop = false;
+
+// =============================================================================
+// GLOBAL STATE (Core 0 only)
 // =============================================================================
 
 static bool s_bleConnected = false;
 static unsigned long s_lastUpdateTime = 0;
 
 // =============================================================================
-// BLE CALLBACKS
+// CORE 1: STEPPER PULSE GENERATION
 // =============================================================================
 
 /**
- * @brief Called when a command is received over BLE
+ * @brief Core 1 setup - runs in parallel with Core 0 setup()
+ */
+void setup1() {
+    // Wait for Core 0 to initialize I2C and MCP23017 first
+    delay(2000);
+    
+    // Initialize the stepper system on Core 1
+    simple_stepper_init();
+}
+
+/**
+ * @brief Core 1 loop - dedicated to stepper pulse generation
+ * 
+ * This runs completely isolated from BLE processing, ensuring
+ * deterministic timing for step pulses.
+ */
+void loop1() {
+    // Check for new speed commands (non-blocking)
+    if (mutex_try_enter(&g_speedMutex, nullptr)) {
+        if (g_emergencyStop) {
+            simple_stepper_stop_all();
+            g_emergencyStop = false;
+        } else if (g_speedsUpdated) {
+            for (int i = 0; i < 4; i++) {
+                simple_stepper_set_speed(i, g_targetSpeeds[i]);
+            }
+            g_speedsUpdated = false;
+        }
+        mutex_exit(&g_speedMutex);
+    }
+    
+    // Generate step pulses (runs at 500µs intervals internally)
+    simple_stepper_update();
+}
+
+// =============================================================================
+// CORE 0: BLE CALLBACKS
+// =============================================================================
+
+/**
+ * @brief Called when a command is received over BLE (Core 0)
  */
 void onBleCommand(const char* jsonData, uint16_t length) {
     // Feed safety watchdog
@@ -57,11 +113,10 @@ void onBleCommand(const char* jsonData, uint16_t length) {
         profile_mecanum_apply(&cmd);
 #endif
     }
-    // Add other profiles here as needed
 }
 
 /**
- * @brief Called when BLE connection state changes
+ * @brief Called when BLE connection state changes (Core 0)
  */
 void onBleConnectionChange(bool connected) {
     s_bleConnected = connected;
@@ -70,20 +125,28 @@ void onBleConnectionChange(bool connected) {
         Serial.println(">>> Client connected!");
     } else {
         Serial.println(">>> Client disconnected - stopping motors");
+        
+        // Signal Core 1 to stop all motors
+        mutex_enter_blocking(&g_speedMutex);
+        g_emergencyStop = true;
+        mutex_exit(&g_speedMutex);
+        
         motors_stop_all();
     }
 }
 
 // =============================================================================
-// ARDUINO SETUP
+// CORE 0: ARDUINO SETUP
 // =============================================================================
 
 void setup() {
+    // Initialize mutex FIRST (before Core 1 starts using it)
+    mutex_init(&g_speedMutex);
+    
     // Initialize serial for debugging
     Serial.begin(115200);
     
     // Wait 10 seconds for serial monitor reconnection after flash
-    // (Pico requires BOOTSEL mode for flashing, so monitor disconnects)
     delay(10000);
     while (!Serial && millis() < 13000) {
         // Wait for serial (additional 3 seconds if not ready)
@@ -92,9 +155,12 @@ void setup() {
     Serial.println();
     Serial.println("===========================================");
     Serial.println("   RC Robot Controller - Pico W Edition");
+    Serial.println("        MULTICORE ARCHITECTURE v2.0");
     Serial.println("===========================================");
     Serial.printf("Device Name: %s\n", DEVICE_NAME);
     Serial.printf("PIN Code: %06d\n", BLE_PASSKEY);
+    Serial.println("Core 0: BLE + Commands");
+    Serial.println("Core 1: Stepper Pulses");
     Serial.println();
     
     // Initialize LED for status
@@ -103,136 +169,67 @@ void setup() {
     
     // Initialize safety watchdog
     safety_init();
-    
+        
     // =========================================================================
-    // I2C BUS SCAN (with pin auto-detection)
-    // Some MechaPico MCB revisions use GPIO 9/10 instead of GPIO 4/5
+    // MOTOR INITIALIZATION (Core 0 - I2C setup)
     // =========================================================================
-    Serial.println("[I2C] Scanning for MCP23017...");
-    
-    // Try GPIO 4/5 first (standard)
-    int devicesOnPins4_5 = 0;
-    Wire.setSDA(4);
-    Wire.setSCL(5);
-    Wire.begin();
-    for (uint8_t addr = 0x20; addr <= 0x21; addr++) {
-        Wire.beginTransmission(addr);
-        if (Wire.endTransmission() == 0) {
-            Serial.printf("[I2C] GPIO 4/5: Found device at 0x%02X\n", addr);
-            devicesOnPins4_5++;
-        }
-    }
-    Wire.end();
-    
-    // Try GPIO 9/10 (alternate MechaPico MCB revision)
-    int devicesOnPins9_10 = 0;
-    Wire.setSDA(8);  // GPIO 8 for SDA on I2C0
-    Wire.setSCL(9);  // GPIO 9 for SCL on I2C0
-    Wire.begin();
-    for (uint8_t addr = 0x20; addr <= 0x21; addr++) {
-        Wire.beginTransmission(addr);
-        if (Wire.endTransmission() == 0) {
-            Serial.printf("[I2C] GPIO 8/9: Found device at 0x%02X\n", addr);
-            devicesOnPins9_10++;
-        }
-    }
-    Wire.end();
-    
-    if (devicesOnPins4_5 == 0 && devicesOnPins9_10 == 0) {
-        Serial.println("[I2C] WARNING: No MCP23017 found on GPIO 4/5 OR GPIO 8/9!");
-        Serial.println("[I2C] Check: 3.3V power to MCP23017, physical wiring");
-    } else if (devicesOnPins9_10 > devicesOnPins4_5) {
-        Serial.println("[I2C] >>> MCP23017 found on GPIO 8/9 - UPDATE mcp23017.h! <<<");
-        Serial.println("[I2C] Change MCP23017_I2C_SDA_PIN to 8, MCP23017_I2C_SCL_PIN to 9");
-    } else {
-        Serial.printf("[I2C] MCP23017 found on GPIO 4/5 (%d devices)\n", devicesOnPins4_5);
-    }
-    
-    // =========================================================================
-    // MOTOR INITIALIZATION
-    // =========================================================================
-    Serial.println("[Setup] Initializing motors...");
+    Serial.println("[Core0] Initializing motors...");
     bool motorsOk = motors_init();
     if (!motorsOk) {
         Serial.println("ERROR: Motor initialization failed!");
         Serial.println("       MCP23017 not responding - check I2C wiring");
-        // Continue anyway to allow BLE debugging
     } else {
-        Serial.println("[Setup] Motors initialized OK");
+        Serial.println("[Core0] Motors initialized OK");
     }
     
-    // STEPPER HARDWARE TEST with I2C verification (only if motors initialized)
+    // STEPPER INITIALIZATION (only if motors initialized)
 #if defined(STEPPER_DRIVER_TMC2209) || defined(STEPPER_DRIVER_A4988) || defined(STEPPER_DRIVER_DRV8825)
     if (motorsOk) {
-        Serial.println("[TEST] I2C Verification test...");
+        Serial.println("[Core0] Configuring steppers...");
         
-        // Read current Port B value
-        uint8_t readBack = mcpStepper.readRegister(MCP23017_OLATB);
-        Serial.printf("[TEST] Port B initial: 0x%02X\n", readBack);
+        // Configure: spread=0, ms1=0, ms2=1 (1/4 step)
+        mcpStepper.setBitA(STPR_ALL_SPRD_BIT, false);  // StealthChop
+        mcpStepper.setBitA(STPR_ALL_MS1_BIT, false);   // MS1=0
+        mcpStepper.setBitA(STPR_ALL_MS2_BIT, true);    // MS2=1 = 1/4 microstep
+        mcpStepper.setBitA(STPR_ALL_PDN_BIT, true);    // PDN=1 for standalone mode
+        mcpStepper.setBitA(STPR_ALL_EN_BIT, false);    // EN=0 (enabled)
         
-        // Write 0xAA to Port B
-        mcpStepper.setPortB(0xAA);
-        readBack = mcpStepper.readRegister(MCP23017_OLATB);
-        Serial.printf("[TEST] Port B after 0xAA write: 0x%02X %s\n", readBack, (readBack == 0xAA) ? "OK" : "FAIL!");
-        
-        // Write 0x55 to Port B
-        mcpStepper.setPortB(0x55);
-        readBack = mcpStepper.readRegister(MCP23017_OLATB);
-        Serial.printf("[TEST] Port B after 0x55 write: 0x%02X %s\n", readBack, (readBack == 0x55) ? "OK" : "FAIL!");
-        
-        // Reset to 0
-        mcpStepper.setPortB(0x00);
-        
-        // Light up LED_BAR_1 to indicate I2C is working
-        mcpStepper.setBitA(LED_BAR_1_BIT, true);
-        Serial.println("[TEST] LED_BAR_1 should be ON");
-        
-        // Now test stepping - 200 steps on Motor 0 only (GPB1 = STEP)
-        Serial.println("[TEST] Sending 200 step pulses to Motor 0 (GPB1)...");
-        stepperEnableAll();
-        stepperSetDirection(0, true);
-        
-        for (int step = 0; step < 200; step++) {
-            stepperPulse(0);
-            delayMicroseconds(2000);  // Slower: 500 steps/sec
-        }
-        Serial.println("[TEST] Done - Motor 0 should have moved ~1 revolution");
+        Serial.println("[Core0] Steppers configured");
     }
 #endif
     
     // =========================================================================
-    // BLE INITIALIZATION (after motors to avoid I2C conflicts)
+    // BLE INITIALIZATION (Core 0 - after motors to avoid I2C conflicts)
     // =========================================================================
     ble_init(onBleCommand, onBleConnectionChange);
     
     Serial.println();
-    Serial.println("Setup complete - waiting for BLE connection...");
+    Serial.println("[Core0] Setup complete - Core 1 handles stepper pulses");
     Serial.println();
     
     s_lastUpdateTime = millis();
 }
 
 // =============================================================================
-// ARDUINO LOOP
+// CORE 0: ARDUINO LOOP (BLE only - no stepper updates!)
 // =============================================================================
 
 void loop() {
-    // Process BLE events
+    // Process BLE events (this is Core 0's main job)
     ble_update();
     
-    // Motor update at 50Hz
+    // Motor update at 50Hz (safety check only)
     unsigned long now = millis();
     if (now - s_lastUpdateTime >= MOTOR_UPDATE_INTERVAL_MS) {
-        float dtSec = (now - s_lastUpdateTime) / 1000.0f;
         s_lastUpdateTime = now;
         
         // Check safety timeout
         if (s_bleConnected && safety_check_timeout()) {
-            // Timeout triggered - motors already stopped by safety module
+            // Signal Core 1 to stop
+            mutex_enter_blocking(&g_speedMutex);
+            g_emergencyStop = true;
+            mutex_exit(&g_speedMutex);
         }
-        
-        // Update motor control loops
-        motors_update(dtSec);
     }
     
     // Status LED: blink when disconnected, solid when connected

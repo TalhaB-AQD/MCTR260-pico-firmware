@@ -110,6 +110,33 @@ public:
      */
     void setHome();
     
+    /**
+     * @brief Update timing and acceleration (call before batched step generation)
+     * @param dtSec Delta time in seconds
+     * @return true if a step is needed this cycle
+     */
+    bool updateTiming(float dtSec);
+    
+    /**
+     * @brief Get the step bit mask for this motor (for batched writes)
+     */
+    uint8_t getStepBit() const;
+    
+    /**
+     * @brief Get the direction bit mask for this motor
+     */
+    uint8_t getDirBit() const;
+    
+    /**
+     * @brief Get the desired direction for this motor
+     */
+    bool getDesiredDirection() const;
+    
+    /**
+     * @brief Acknowledge that a step was generated (update position and timing)
+     */
+    void acknowledgeStep();
+    
 private:
     MotorStepperConfig cfg_;
     

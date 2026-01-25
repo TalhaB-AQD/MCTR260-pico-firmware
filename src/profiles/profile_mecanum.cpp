@@ -3,7 +3,7 @@
  * @brief Mecanum drive motion profile implementation
  *
  * Converts joystick commands to mecanum wheel speeds.
- * Works with both DC motors (PWM) and steppers (steps/sec).
+ * Sends speed commands to Core 1 via shared memory (multicore architecture).
  */
 
 #include "profile_mecanum.h"
@@ -15,6 +15,14 @@
 #include "project_config.h"
 
 #include <Arduino.h>
+#include "pico/mutex.h"
+
+// =============================================================================
+// INTER-CORE COMMUNICATION (defined in main.cpp)
+// =============================================================================
+extern mutex_t g_speedMutex;
+extern volatile float g_targetSpeeds[4];
+extern volatile bool g_speedsUpdated;
 
 void profile_mecanum_apply(const control_command_t* cmd) {
     // Extract inputs from command
@@ -61,35 +69,35 @@ void profile_mecanum_apply(const control_command_t* cmd) {
         motor_set_pwm(2, (int16_t)(wheels.backLeft * 2.55f));
         motor_set_pwm(3, (int16_t)(wheels.backRight * 2.55f));
     } else if (hasSteppers) {
-        // Re-enable steppers (safety timeout disables them)
-        stepperEnableAll();
+        // NOTE: stepperEnableAll() removed - already enabled in setup()
+        // and calling it here causes I2C contention with Core 1
         
         // Steppers: convert -100..+100 to steps/sec
-        // Scale by max speed (e.g., 100% = STEPPER_MAX_SPEED)
         float scale = STEPPER_MAX_SPEED / 100.0f;
         float s0 = wheels.frontLeft * scale;
         float s1 = wheels.frontRight * scale;
         float s2 = wheels.backLeft * scale;
         float s3 = wheels.backRight * scale;
         
-        // Debug: print non-zero speeds
-        if (s0 != 0 || s1 != 0 || s2 != 0 || s3 != 0) {
-            static unsigned long lastPrint = 0;
-            if (millis() - lastPrint > 500) {
-                Serial.printf("[Mecanum] Steps/sec: %.0f %.0f %.0f %.0f\n", s0, s1, s2, s3);
-                lastPrint = millis();
-            }
+        // =================================================================
+        // MULTICORE: Send speeds to Core 1 via shared memory
+        // =================================================================
+        // Use try_enter to avoid blocking Core 0 if Core 1 has the mutex
+        if (mutex_try_enter(&g_speedMutex, nullptr)) {
+            g_targetSpeeds[0] = s0;
+            g_targetSpeeds[1] = s1;
+            g_targetSpeeds[2] = s2;
+            g_targetSpeeds[3] = s3;
+            g_speedsUpdated = true;
+            mutex_exit(&g_speedMutex);
         }
+        // If mutex busy, skip this update - Core 1 will get the next one
         
-        motor_set_speed(0, s0);
-        motor_set_speed(1, s1);
-        motor_set_speed(2, s2);
-        motor_set_speed(3, s3);
     } else {
         // No motors detected - log warning once
         static bool warnDone = false;
         if (!warnDone) {
-            Serial.println("[Mecanum] WARNING: No motors detected! Check motor initialization.");
+            Serial.println("[Mecanum] WARNING: No motors detected!");
             warnDone = true;
         }
     }

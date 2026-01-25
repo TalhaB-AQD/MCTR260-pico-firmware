@@ -118,7 +118,7 @@ bool motors_init() {
             .pinEnable = -1,    // Shared enable via MCP23017 GPA3
             .stepsPerRev = STEPPER_STEPS_PER_REV,
             .microstepping = STEPPER_MICROSTEPPING,
-            .direction = 1,     // Front-Left
+            .direction = -1,    // Front-Left (inverted for vehicle forward)
             .maxSpeed = STEPPER_MAX_SPEED,
             .acceleration = STEPPER_ACCELERATION
         },
@@ -144,7 +144,7 @@ bool motors_init() {
             .pinEnable = -1,
             .stepsPerRev = STEPPER_STEPS_PER_REV,
             .microstepping = STEPPER_MICROSTEPPING,
-            .direction = 1,     // Back-Left
+            .direction = -1,    // Back-Left (inverted for vehicle forward)
             .maxSpeed = STEPPER_MAX_SPEED,
             .acceleration = STEPPER_ACCELERATION
         },

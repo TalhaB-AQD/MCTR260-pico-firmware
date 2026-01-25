@@ -9,6 +9,7 @@
 
 #include "mcp23017.h"
 #include "pico/stdlib.h"
+#include <Arduino.h>
 #include <cstring>
 
 // =============================================================================
@@ -117,14 +118,34 @@ uint8_t MCP23017::readRegister(uint8_t reg) {
 // PORT ACCESS
 // =============================================================================
 
+// I2C error tracking
+static uint32_t i2cErrorCount = 0;
+static uint32_t i2cWriteCount = 0;
+static unsigned long lastI2CErrorLog = 0;
+
 void MCP23017::setPortA(uint8_t value) {
     portA_ = value;
-    writeRegister(MCP23017_OLATA, portA_);
+    if (!writeRegister(MCP23017_OLATA, portA_)) {
+        i2cErrorCount++;
+    }
+    i2cWriteCount++;
 }
 
 void MCP23017::setPortB(uint8_t value) {
     portB_ = value;
-    writeRegister(MCP23017_OLATB, portB_);
+    if (!writeRegister(MCP23017_OLATB, portB_)) {
+        i2cErrorCount++;
+        
+        // Log I2C errors periodically
+        unsigned long now = millis();
+        if (now - lastI2CErrorLog >= 1000) {  // Every 1 second max
+            Serial.printf("[I2C] ERROR! Writes: %lu, Errors: %lu (%.1f%%)\n",
+                          i2cWriteCount, i2cErrorCount,
+                          (float)i2cErrorCount * 100.0f / i2cWriteCount);
+            lastI2CErrorLog = now;
+        }
+    }
+    i2cWriteCount++;
 }
 
 // =============================================================================
@@ -174,6 +195,7 @@ void stepperEnableAll() {
  * @brief Disable all stepper motors (set STPR_ALL_EN HIGH)
  */
 void stepperDisableAll() {
+    Serial.printf("[Stepper] DISABLED at %lu ms\n", millis());
     mcpStepper.setBitA(STPR_ALL_EN_BIT, true);  // Inactive HIGH
 }
 
@@ -249,4 +271,34 @@ void stepperPulse(uint8_t motorIndex) {
         sleep_us(2);
         mcpStepper.setBitB(cfg.stepBit, false);
     }
+}
+
+/**
+ * @brief Generate step pulses for multiple motors with a single I2C transaction pair
+ * 
+ * This is the key optimization for I2C-based stepper control.
+ * Instead of 2 I2C writes per motor (8 writes for 4 motors), we do just 2 total.
+ */
+void stepperPulseBatchPortB(uint8_t stepMask) {
+    if (stepMask == 0) return;
+    
+    // Get current port B value and set all requested STEP bits HIGH
+    uint8_t portB = mcpStepper.getPortB();
+    mcpStepper.setPortB(portB | stepMask);
+    
+    // Brief delay for pulse width (TMC2209 minimum is 100ns, we use 2us for safety)
+    sleep_us(2);
+    
+    // Clear all STEP bits (keep direction bits as they were)
+    mcpStepper.setPortB(portB & ~stepMask);
+}
+
+/**
+ * @brief Set direction bits for multiple motors efficiently
+ */
+void stepperSetDirectionBatch(uint8_t setHighMask, uint8_t setLowMask) {
+    uint8_t portB = mcpStepper.getPortB();
+    portB |= setHighMask;    // Set HIGH bits
+    portB &= ~setLowMask;    // Clear LOW bits
+    mcpStepper.setPortB(portB);
 }

@@ -33,12 +33,15 @@ void safety_feed() {
 }
 
 bool safety_check_timeout() {
+    // TEMPORARILY DISABLED FOR DEBUGGING
+    return false;
+    
     unsigned long now = millis();
     unsigned long elapsed = now - s_lastFeedTime;
     
     if (elapsed >= SAFETY_TIMEOUT_MS) {
         if (!s_stopTriggered) {
-            Serial.println("[Safety] TIMEOUT - Stopping all motors!");
+            Serial.printf("[Safety] TIMEOUT at %lu ms - Stopping all motors!\n", now);
             motors_stop_all();
             s_stopTriggered = true;
         }

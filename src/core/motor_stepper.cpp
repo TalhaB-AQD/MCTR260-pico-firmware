@@ -120,8 +120,9 @@ void MotorStepper::update(float dtSec) {
     // ==========================================================================
     
     if (fabsf(currentSpeed_) < 1.0f) {
-        // Stopped
+        // Stopped - reset timing for clean start when motion resumes
         stepInterval_ = 0;
+        lastStepTime_ = micros();  // Reset to prevent stale delta on resume
         return;
     }
     
@@ -133,6 +134,15 @@ void MotorStepper::update(float dtSec) {
     int stepsThisUpdate = 0;
     const int maxStepsPerUpdate = 200;  // Safety limit
     
+    // Debug: check why steps aren't being generated
+    static unsigned long lastDebugPrint = 0;
+    if (cfg_.index == 0 && now - lastDebugPrint >= 500000) {  // Every 500ms, motor 0 only
+        long delta = (long)(now - lastStepTime_);
+        Serial.printf("[M0 DBG] speed=%.1f interval=%lu delta=%ld\n", 
+                      currentSpeed_, stepInterval_, delta);
+        lastDebugPrint = now;
+    }
+    
     while (stepInterval_ > 0 && (now - lastStepTime_) >= stepInterval_) {
         generateStep();
         lastStepTime_ += stepInterval_;  // Increment by interval, not current time
@@ -141,7 +151,19 @@ void MotorStepper::update(float dtSec) {
         if (stepsThisUpdate >= maxStepsPerUpdate) {
             // Prevent runaway - reset timing
             lastStepTime_ = now;
+            if (cfg_.index == 0) {
+                Serial.println("[M0 DBG] Hit maxStepsPerUpdate limit!");
+            }
             break;
+        }
+    }
+    
+    // Debug: show steps generated
+    if (cfg_.index == 0 && stepsThisUpdate > 0 && now - lastDebugPrint < 500000) {
+        static unsigned long lastStepPrint = 0;
+        if (now - lastStepPrint >= 200000) {  // Every 200ms
+            Serial.printf("[M0 DBG] Generated %d steps this update\n", stepsThisUpdate);
+            lastStepPrint = now;
         }
     }
 }

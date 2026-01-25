@@ -207,7 +207,7 @@ int gattWriteCallback(uint16_t value_handle, uint8_t* buffer, uint16_t size) {
             if (c == '\n' || c == '\r') {
                 // Complete line received - process it
                 if (s_rxBuffer.length() > 0 && s_commandCallback) {
-                    Serial.printf("[BLE] RX: %s\n", s_rxBuffer.c_str());
+                    // HOT PATH - no logging here (causes 8ms loop delays)
                     s_commandCallback(s_rxBuffer.c_str(), s_rxBuffer.length());
                 }
                 s_rxBuffer = "";
@@ -224,7 +224,7 @@ int gattWriteCallback(uint16_t value_handle, uint8_t* buffer, uint16_t size) {
                 if (s_rxBuffer[i] == '}') braceCount--;
             }
             if (braceCount == 0 && s_commandCallback) {
-                Serial.printf("[BLE] RX (JSON): %s\n", s_rxBuffer.c_str());
+                // HOT PATH - no logging here (causes 8ms loop delays)
                 s_commandCallback(s_rxBuffer.c_str(), s_rxBuffer.length());
                 s_rxBuffer = "";
             }

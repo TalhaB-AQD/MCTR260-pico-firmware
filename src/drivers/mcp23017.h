@@ -290,4 +290,23 @@ void stepperToggleStep(uint8_t motorIndex);
  */
 void stepperPulse(uint8_t motorIndex);
 
+/**
+ * @brief Generate step pulses for multiple motors in a single I2C transaction
+ * @param stepMask Bitmask of STEP bits to pulse (e.g., STPR_M1_STEP_BIT | STPR_M3_STEP_BIT)
+ * 
+ * This is much more efficient than calling stepperPulse() for each motor,
+ * as it uses only 2 I2C writes total instead of 2 per motor.
+ * Only works for motors M1-M4 which are on Port B.
+ */
+void stepperPulseBatchPortB(uint8_t stepMask);
+
+/**
+ * @brief Set direction bits for multiple motors in a single I2C transaction
+ * @param dirMask Bitmask of direction bits to set HIGH
+ * @param clearMask Bitmask of direction bits to set LOW
+ * 
+ * Efficiently sets multiple motor directions with one I2C write.
+ */
+void stepperSetDirectionBatch(uint8_t setHighMask, uint8_t setLowMask);
+
 #endif // MCP23017_H
