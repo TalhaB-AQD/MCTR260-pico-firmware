@@ -1,6 +1,13 @@
 /**
  * @file motor_manager.h
- * @brief Central motor registry and control
+ * @brief Central motor registry — init, stop, and access for all motors
+ *
+ * INIT SEQUENCE: motors_init() must be called BEFORE BLE starts (BLE takes
+ * over Core 0's scheduling). Order: I2C → MCP23017 → microstepping → motors.
+ *
+ * MULTICORE I2C CAVEAT: motors_stop_all() writes to MCP23017 from Core 0.
+ * If Core 1 is also writing (simple_stepper), I2C bus contention can occur.
+ * This is acceptable for emergency stop (safety > timing precision).
  */
 
 #ifndef MOTOR_MANAGER_H
@@ -10,7 +17,7 @@
 #include <stdint.h>
 
 // Maximum number of motors
-#define NUM_MOTORS  4
+#define NUM_MOTORS 4
 
 /**
  * @brief Initialize all motors based on project_config.h
@@ -23,7 +30,7 @@ bool motors_init();
  * @param index Motor index (0-3)
  * @return Pointer to motor, or nullptr if not found
  */
-MotorBase* motor_get(int index);
+MotorBase *motor_get(int index);
 
 /**
  * @brief Set target for a DC motor (PWM value)

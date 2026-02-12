@@ -1,6 +1,12 @@
 /**
  * @file safety.h
- * @brief Motor safety watchdog
+ * @brief Motor safety watchdog — see safety.cpp for full pattern explanation
+ *
+ * USAGE:
+ *   safety_init()           — call once at startup
+ *   safety_feed()           — call on EVERY received BLE command (including
+ * heartbeats) safety_check_timeout()  — call in loop(); returns true if timed
+ * out → stop motors
  */
 
 #ifndef SAFETY_H

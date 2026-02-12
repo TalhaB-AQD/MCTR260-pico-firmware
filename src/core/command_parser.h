@@ -1,6 +1,9 @@
 /**
  * @file command_parser.h
- * @brief JSON command parsing interface
+ * @brief JSON command parsing — BLE JSON string → control_command_t struct
+ *
+ * See command_parser.cpp for full protocol format and ArduinoJson details.
+ * Thread safety: called only on Core 0 (BLE callback context).
  */
 
 #ifndef COMMAND_PARSER_H
@@ -14,12 +17,12 @@
  * @param cmd Output command structure
  * @return true if parsing succeeded
  */
-bool command_parse(const char* json, control_command_t* cmd);
+bool command_parse(const char *json, control_command_t *cmd);
 
 /**
  * @brief Get the current (most recent) command
  */
-const control_command_t* command_get_current(void);
+const control_command_t *command_get_current(void);
 
 /**
  * @brief Get the last speed setting (for safety validation)

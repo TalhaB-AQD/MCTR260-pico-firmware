@@ -1,9 +1,15 @@
 /**
  * @file simple_stepper.h
- * @brief Simple timer-driven stepper control for MCP23017
- * 
- * This bypasses the complex MotorStepper class and uses direct
- * port writes, similar to the working Python test.
+ * @brief Core 1 real-time stepper engine — flat C API for direct MCP23017
+ * control
+ *
+ * WHY THIS EXISTS ALONGSIDE MotorStepper:
+ *   MotorStepper (OOP) does 8 I2C writes for 4 motors (2 per motor).
+ *   simple_stepper batches all 4 motors into 2 I2C writes total.
+ *   On Core 1's tight 500µs loop, this 4x reduction is critical.
+ *
+ * THREAD SAFETY: All functions here run ONLY on Core 1.
+ *   Core 0 communicates via g_targetSpeeds[] protected by g_speedMutex.
  */
 
 #ifndef SIMPLE_STEPPER_H
