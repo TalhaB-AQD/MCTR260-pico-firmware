@@ -53,8 +53,7 @@
 // Distance from center to left/right wheel (half of track width)
 #define TRACK_WIDTH_HALF_MM     100.0f
 
-// Dead zone: joystick values below this are treated as zero (0-100 scale)
-#define MOTOR_DEADZONE          5.0f
+// NOTE: Joystick deadzone is handled by the Flutter app at input level
 
 // =============================================================================
 // GPIO PIN ASSIGNMENTS - DC MOTORS (DRV8871)
@@ -165,7 +164,6 @@
 #define STEPPER_PULSE_INTERVAL_US   500
 
 // Speed deadzone - speeds below this are treated as zero (steps/sec)
-// Prevents jitter from small floating point noise
 #define STEPPER_SPEED_DEADZONE  10.0f
 
 // =============================================================================

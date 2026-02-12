@@ -49,7 +49,7 @@ void profile_mecanum_apply(const control_command_t* cmd) {
     
     // Calculate wheel speeds
     WheelSpeeds wheels;
-    mecanum_calculate(vx, vy, omega, speedMult, MOTOR_DEADZONE, &wheels);
+    mecanum_calculate(vx, vy, omega, speedMult, &wheels);
     
     // Apply to motors based on type
     bool hasDC = motors_has_dc();
@@ -78,6 +78,38 @@ void profile_mecanum_apply(const control_command_t* cmd) {
         float s1 = wheels.frontRight * scale;
         float s2 = wheels.backLeft * scale;
         float s3 = wheels.backRight * scale;
+        
+        // =================================================================
+        // DIAGNOSTIC: Track direction changes at BOTH center and rim
+        // =================================================================
+        static float prevS0 = 0, prevS1 = 0;
+        static unsigned long lastDirChangeTime[4] = {0};
+        static int8_t prevDir[4] = {0};
+        static unsigned long lastDebug = 0;
+        
+        float maxSpeed = fmaxf(fmaxf(fabsf(s0), fabsf(s1)), fmaxf(fabsf(s2), fabsf(s3)));
+        bool isCenter = (maxSpeed < 500 && maxSpeed > 10);
+        bool isRim = (maxSpeed > 2000);
+        
+        // Check for direction changes on motor 0 (FR motor as example)
+        int8_t curDir0 = (s0 > 10) ? 1 : ((s0 < -10) ? -1 : 0);
+        unsigned long now = millis();
+        
+        if (curDir0 != 0 && curDir0 != prevDir[0] && prevDir[0] != 0) {
+            // Direction changed - log comparison data
+            unsigned long timeSinceLastChange = now - lastDirChangeTime[0];
+            const char* location = isCenter ? "CENTER" : (isRim ? "RIM" : "MID");
+            
+            if (now - lastDebug > 30) {  // Max 33Hz logging
+                Serial.printf("[DIAG] %s: s0=%.0f prevS0=%.0f | speed=%.0f | timeSinceRev=%lums\n",
+                              location, s0, prevS0, maxSpeed, timeSinceLastChange);
+                lastDebug = now;
+            }
+            lastDirChangeTime[0] = now;
+        }
+        
+        prevDir[0] = curDir0;
+        prevS0 = s0;
         
         // =================================================================
         // MULTICORE: Send speeds to Core 1 via shared memory

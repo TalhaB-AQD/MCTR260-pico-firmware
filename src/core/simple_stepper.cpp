@@ -60,16 +60,15 @@ void simple_stepper_set_speed(uint8_t motor, float stepsPerSec) {
     float newSpeed = stepsPerSec * DIR_INVERT[motor];
     float oldSpeed = motors[motor].targetSpeed;
     
-    // FIX #2: Detect direction change INCLUDING transitions through zero
-    // Old logic failed on 0 → -X because oldSpeed was 0
-    // New logic: check if signs differ (treating 0 as sign of the new direction)
+    // Detect direction change (signs opposite)
+    // Only reset accumulator - let currentSpeed ramp naturally through zero
+    // The zero-crossing detector in update() handles the transition smoothly
     bool signsOpposite = (newSpeed > 0 && oldSpeed < 0) || (newSpeed < 0 && oldSpeed > 0);
     
-    // Reset accumulator on direction change OR when entering zero
-    // (FIX #1: Removed asymmetric check for newSpeed < deadzone here)
     if (signsOpposite) {
         motors[motor].accumulator = 0;
-        motors[motor].currentSpeed = 0;  // Also reset ramp to prevent stale direction
+        // NOTE: Do NOT reset currentSpeed here - let ramping handle deceleration
+        // Resetting causes a velocity discontinuity (jerk) at direction changes
     }
     
     motors[motor].targetSpeed = newSpeed;
@@ -100,28 +99,38 @@ void simple_stepper_update() {
     for (int i = 0; i < 4; i++) {
         float target = motors[i].targetSpeed;
         float current = motors[i].currentSpeed;
-        float prevCurrent = current;  // Save for zero-crossing detection
         
-        // Apply acceleration ramping (always, even when decelerating to zero)
-        // FIX #2: Removed aggressive zero-snap that bypassed ramping
+        // Apply acceleration ramping
         float diff = target - current;
         if (fabsf(diff) > ACCEL_PER_UPDATE) {
             current += (diff > 0) ? ACCEL_PER_UPDATE : -ACCEL_PER_UPDATE;
         } else {
             current = target;
         }
-        motors[i].currentSpeed = current;
         
-        // Zero-crossing detection: reset accumulator when speed crosses zero
-        bool crossedZero = (prevCurrent > 0 && current <= 0) || (prevCurrent < 0 && current >= 0);
-        if (crossedZero) {
-            motors[i].accumulator = 0;
+        // CRITICAL: Prevent zero-crossing during deceleration
+        // If target is zero (or near-zero) and we're decelerating, clamp at zero
+        if (fabsf(target) < STEPPER_SPEED_DEADZONE) {
+            // Target is stop - decelerate but don't cross zero
+            if ((motors[i].currentSpeed > 0 && current <= 0) ||
+                (motors[i].currentSpeed < 0 && current >= 0)) {
+                current = 0;  // Clamp at zero, don't cross
+            }
         }
+        
+        motors[i].currentSpeed = current;
         
         float absSpeed = fabsf(current);
         
-        // FIX #1: Always compute direction bits even when not stepping
-        // This ensures DIR pins are always correct for the NEXT step
+        // Skip motors below deadzone
+        if (absSpeed < STEPPER_SPEED_DEADZONE) {
+            motors[i].accumulator = 0;
+            continue;
+        }
+        
+        anyActive = true;
+        
+        // Direction bit
         if (current > 0) {
             switch (i) {
                 case 0: dirMask |= M1_DIR; break;
@@ -130,15 +139,7 @@ void simple_stepper_update() {
                 case 3: dirMask |= M4_DIR; break;
             }
         }
-        // (If current <= 0, direction bit stays 0, which is the opposite direction)
-        
-        // Deadzone check - only skip STEPPING, not direction computation
-        if (absSpeed < STEPPER_SPEED_DEADZONE) {
-            motors[i].accumulator = 0;
-            continue;  // Skip stepping but direction is already set above
-        }
-        
-        anyActive = true;
+        // (If current < 0, direction bit stays 0 = reverse direction)
         
         // Accumulator for step timing
         motors[i].accumulator += absSpeed * dt;
@@ -165,7 +166,6 @@ void simple_stepper_update() {
         delayMicroseconds(5);
         mcpStepper.setPortB(dirMask);
     }
-    // NOTE: Removed always-write-dirMask - was causing I2C saturation at 2kHz
     
     // Periodic diagnostics DISABLED on Core 1 - causes jitter
     // Enable only for debugging, then re-disable

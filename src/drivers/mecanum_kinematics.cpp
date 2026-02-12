@@ -9,12 +9,11 @@
 #include <math.h>
 
 void mecanum_calculate(float vx, float vy, float omega,
-                       float speedMultiplier, float deadzone,
+                       float speedMultiplier,
                        WheelSpeeds* output) {
-    // Apply deadzone
-    if (fabsf(vx) < deadzone) vx = 0;
-    if (fabsf(vy) < deadzone) vy = 0;
-    if (fabsf(omega) < deadzone) omega = 0;
+    // NOTE: Deadzone filtering is handled by the Flutter app at input level
+    // NOTE: Deadzone filtering is handled by the Flutter app at input level
+    // This function does pure kinematics math only
     
     // If all inputs are zero, output zero
     if (vx == 0 && vy == 0 && omega == 0) {
