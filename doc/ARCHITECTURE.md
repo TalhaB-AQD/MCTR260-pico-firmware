@@ -15,11 +15,11 @@
 
 ## What This Does
 
-When you push the joystick in the Flutter app, a JSON command travels over BLE to the Pico W, gets parsed into motor speeds, and — if using stepper motors — crosses from Core 0 to Core 1 via a mutex. Core 1 then generates precisely-timed step pulses through an MCP23017 I2C GPIO expander.
+When you push the joystick in the Flutter app, a JSON command travels over BLE to the Pico W, gets parsed into motor speeds, and, if using stepper motors, crosses from Core 0 to Core 1 via a mutex. Core 1 then generates precisely-timed step pulses through an MCP23017 I2C GPIO expander.
 
 **The problem it solves:** The RP2040 has two cores, and we use both. Core 0 handles all the "smart" work (BLE, parsing, kinematics, safety). Core 1 handles the "fast" work (generating step pulses every 500µs). This separation ensures that BLE processing never causes stepper jitter, and stepper timing never blocks BLE.
 
-**Why not use one core?** BTstack (the BLE stack) runs its own event loop on Core 0 and can block for several milliseconds during connection events. Stepper motors need pulses at precise intervals — even a 2ms delay causes audible rattling and missed steps.
+**Why not use one core?** BTstack (the BLE stack) runs its own event loop on Core 0 and can block for several milliseconds during connection events. Stepper motors need pulses at precise intervals; even a 2ms delay causes audible rattling and missed steps.
 
 ---
 
@@ -31,14 +31,14 @@ flowchart TB
         JS["Joystick / Controls"]
     end
 
-    subgraph Core0["Core 0 — BLE + Logic"]
+    subgraph Core0["Core 0: BLE + Logic"]
         BLE["BTstack BLE\nGATT Server"]
         CP["command_parser\nJSON → struct"]
         PM["profile_mecanum\nKinematics math"]
         SAF["safety\nWatchdog timer"]
     end
 
-    subgraph Core1["Core 1 — Real-Time"]
+    subgraph Core1["Core 1: Real-Time"]
         SS["simple_stepper\n500µs loop"]
         MCP["MCP23017 I2C\nPort B writes"]
     end
@@ -211,14 +211,14 @@ Core 0 (BLE + Logic)              Core 1 (Stepper Pulses)
 │                  │              │                  │
 │  Uses: mutex_    │◄────────────►│  Uses: mutex_    │
 │  try_enter()     │  g_speedMutex│  enter_blocking()│
-│  (non-blocking)  │              │  (blocking OK —  │
+│  (non-blocking)  │              │  (blocking OK,   │
 │                  │              │   Core 1 is fast)│
 └──────────────────┘              └──────────────────┘
 ```
 
 **Why `mutex_try_enter()` on Core 0?**
 
-If Core 1 holds the mutex (it's mid-I2C write), Core 0 **must not block** — BTstack's event loop would stall, causing BLE timeouts. Instead, Core 0 skips the update. At 50Hz command rate, dropping one frame is imperceptible.
+If Core 1 holds the mutex (it's mid-I2C write), Core 0 **must not block**. BTstack's event loop would stall, causing BLE timeouts. Instead, Core 0 skips the update. At 50Hz command rate, dropping one frame is imperceptible.
 
 **Why `mutex_enter_blocking()` on Core 1?**
 

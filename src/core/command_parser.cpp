@@ -13,7 +13,7 @@
  *
  *   The parser is stateful: it keeps the last valid command in
  * s_currentCommand. This allows other modules to call command_get_current() at
- * any time to read the most recent command — useful for telemetry reporting and
+ * any time to read the most recent command, useful for telemetry reporting and
  * safety logic.
  *
  * ESP32 PARITY:
@@ -36,6 +36,21 @@ static bool s_initialized = false;
 // HELPER FUNCTIONS
 // =============================================================================
 
+/**
+ * @brief Parse a joystick or dial input from a JSON object.
+ *
+ * @details The app sends left/right inputs as nested JSON objects:
+ *   Joystick: {"control":"joystick", "x":50.0, "y":80.0}
+ *   Dial:     {"control":"dial", "value":-30.0}
+ *   Slider:   {"control":"slider", "value":60.0}
+ *
+ * The "| default" syntax is ArduinoJson's null-coalescing: if the key
+ * is missing, use the default value. This prevents crashes from
+ * incomplete JSON packets.
+ *
+ * @param obj   Reference to the ArduinoJson object for "left" or "right".
+ * @param input Pointer to the output struct to fill.
+ */
 static void parseJoystickInput(JsonObject &obj, joystick_input_t *input) {
   const char *controlType = obj["control"] | "joystick";
 
@@ -45,6 +60,7 @@ static void parseJoystickInput(JsonObject &obj, joystick_input_t *input) {
     input->y = obj["y"] | 0.0f;
     input->value = 0.0f;
   } else {
+    // Dial or slider: single-axis control
     input->isJoystick = false;
     input->x = 0.0f;
     input->y = 0.0f;
@@ -56,6 +72,17 @@ static void parseJoystickInput(JsonObject &obj, joystick_input_t *input) {
 // PUBLIC API
 // =============================================================================
 
+/**
+ * @details Uses ArduinoJson v7's JsonDocument which auto-sizes on the
+ * stack. Typical command JSON is ~200 bytes, well within stack limits.
+ *
+ * The parser handles two command types:
+ *   - "heartbeat": no payload, just resets the safety watchdog.
+ *   - "control": full joystick/speed/aux/toggle payload.
+ *
+ * The parsed command is COPIED into s_currentCommand so other modules
+ * can read the latest command at any time via command_get_current().
+ */
 bool command_parse(const char *json, control_command_t *cmd) {
   if (!json || !cmd) {
     return false;
@@ -136,10 +163,16 @@ bool command_parse(const char *json, control_command_t *cmd) {
   return false;
 }
 
+/** @details Returns a pointer to the internal static copy, NOT the
+ *  caller's cmd struct. Valid until the next successful parse. */
 const control_command_t *command_get_current(void) { return &s_currentCommand; }
 
+/** @details Reads the speed field from the last parsed command.
+ *  Returns 0 before any command is received. */
 uint8_t command_get_last_speed(void) { return s_currentCommand.speed; }
 
+/** @details Compares the type field using strcmp. The type is set by
+ *  command_parse() from the JSON "type" key. */
 bool command_is_heartbeat(void) {
   return strcmp(s_currentCommand.type, "heartbeat") == 0;
 }

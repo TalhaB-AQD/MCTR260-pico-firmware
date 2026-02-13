@@ -1,16 +1,16 @@
-/**
+﻿/**
  * @file mcp23017.cpp
- * @brief MCP23017 16-bit I2C GPIO Expander — driver implementation
+ * @brief MCP23017 16-bit I2C GPIO Expander: driver implementation
  *
  * Controls the two MCP23017 chips on the MechaPico MCB:
  *   - U6_1 (0x20): Stepper motors M1-M5, enable, microstepping, SPREAD/PDN
  *   - U6_2 (0x21): DC motors 3-4, LEDs, general 5V I/O
  *
  * I2C PERFORMANCE (400kHz bus, 3-byte writes):
- *   Single register write:  ~50µs (start + addr + reg + data + stop)
- *   stepperPulse() per motor: ~100µs (set + clear = 2 writes)
- *   stepperPulseBatchPortB(): ~100µs total for ALL 4 motors (2 writes)
- *   → Batching saves ~300µs per Core 1 update cycle
+ *   Single register write:  ~50uss (start + addr + reg + data + stop)
+ *   stepperPulse() per motor: ~100uss (set + clear = 2 writes)
+ *   stepperPulseBatchPortB(): ~100uss total for ALL 4 motors (2 writes)
+ *   -> Batching saves ~300uss per Core 1 update cycle
  *
  * See mcp23017.h for the full MechaPico MCB pin mapping diagrams.
  */
@@ -41,6 +41,12 @@ MCP23017::MCP23017(uint8_t addr)
 // I2C INITIALIZATION (shared across all instances)
 // =============================================================================
 
+/**
+ * @details Sets up the Pico's i2c0 peripheral at 400kHz (Fast Mode).
+ * Internal pull-ups are enabled as a safety net, but the MechaPico MCB
+ * has external 4.7k pull-up resistors on SDA/SCL for reliable signaling.
+ * Without pull-ups, I2C signals won't return to HIGH between bits.
+ */
 void MCP23017::initI2C() {
   if (i2cInitialized_)
     return;
@@ -48,12 +54,11 @@ void MCP23017::initI2C() {
   // Initialize I2C peripheral
   i2c_init(MCP23017_I2C_PORT, MCP23017_I2C_FREQ);
 
-  // Configure GPIO pins for I2C
+  // Configure GPIO pins for I2C function
   gpio_set_function(MCP23017_I2C_SDA_PIN, GPIO_FUNC_I2C);
   gpio_set_function(MCP23017_I2C_SCL_PIN, GPIO_FUNC_I2C);
 
-  // Enable internal pull-ups (external pull-ups recommended for reliable
-  // operation)
+  // Enable internal pull-ups (external pulls recommended for production)
   gpio_pull_up(MCP23017_I2C_SDA_PIN);
   gpio_pull_up(MCP23017_I2C_SCL_PIN);
 
@@ -64,6 +69,16 @@ void MCP23017::initI2C() {
 // DEVICE INITIALIZATION
 // =============================================================================
 
+/**
+ * @details Configures all 16 pins as outputs and sets chip-specific safe
+ * starting states:
+ *   - Stepper chip (0x20): PDN=HIGH for standalone STEP/DIR mode (TMC2209
+ *     enters UART diagnostic mode if PDN is LOW). EN=LOW (enabled).
+ *   - DC chip (0x21): all pins LOW (motors stopped, LEDs off).
+ *
+ * The init guard (initialized_ flag) prevents re-initialization if called
+ * multiple times (e.g., during error recovery).
+ */
 bool MCP23017::init() {
   if (initialized_)
     return true;
@@ -80,9 +95,9 @@ bool MCP23017::init() {
   // Initialize outputs to safe state
   if (addr_ == MCP23017_STEPPER_ADDR) {
     // TMC2209 Stepper controller:
-    //   EN = LOW (enabled - active LOW)
+    //   EN = LOW (enabled, active LOW)
     //   PDN = HIGH (standalone STEP/DIR mode, not UART mode)
-    //   SPREAD = LOW (StealthChop mode)
+    //   SPREAD = LOW (StealthChop mode: quiet)
     portA_ = STPR_ALL_PDN_BIT; // EN=0 (enabled), PDN=1 (standalone mode)
     portB_ = 0x00;
   } else {
@@ -130,26 +145,14 @@ uint8_t MCP23017::readRegister(uint8_t reg) {
 // PORT ACCESS
 // =============================================================================
 
-// I2C error tracking
-static uint32_t i2cErrorCount = 0;
-static uint32_t i2cWriteCount = 0;
-static unsigned long lastI2CErrorLog = 0;
-
 void MCP23017::setPortA(uint8_t value) {
   portA_ = value;
-  if (!writeRegister(MCP23017_OLATA, portA_)) {
-    i2cErrorCount++;
-  }
-  i2cWriteCount++;
+  writeRegister(MCP23017_OLATA, portA_);
 }
 
 void MCP23017::setPortB(uint8_t value) {
   portB_ = value;
-  if (!writeRegister(MCP23017_OLATB, portB_)) {
-    i2cErrorCount++;
-    // NOTE: Serial.printf removed - causes jitter on Core 1
-  }
-  i2cWriteCount++;
+  writeRegister(MCP23017_OLATB, portB_);
 }
 
 // =============================================================================
@@ -199,7 +202,6 @@ void stepperEnableAll() {
  * @brief Disable all stepper motors (set STPR_ALL_EN HIGH)
  */
 void stepperDisableAll() {
-  Serial.printf("[Stepper] DISABLED at %lu ms\n", millis());
   mcpStepper.setBitA(STPR_ALL_EN_BIT, true); // Inactive HIGH
 }
 
@@ -208,10 +210,10 @@ void stepperDisableAll() {
  * @param ms1 MS1 pin state
  * @param ms2 MS2 pin state
  *
- * MS1=0, MS2=0: Full step
- * MS1=1, MS2=0: 1/2 step
- * MS1=0, MS2=1: 1/4 step
- * MS1=1, MS2=1: 1/8 step
+ * MS1=0, MS2=0: 8 microsteps (TMC2209 default)
+ * MS1=1, MS2=1: 16 microsteps
+ * MS1=1, MS2=0: 32 microsteps
+ * MS1=0, MS2=1: 64 microsteps
  */
 void stepperSetMicrostepping(bool ms1, bool ms2) {
   mcpStepper.setBitA(STPR_ALL_MS1_BIT, ms1);
@@ -236,13 +238,7 @@ void stepperSetDirection(uint8_t motorIndex, bool forward) {
   }
 }
 
-/**
- * @brief Generate a step pulse for a specific motor
- * @param motorIndex Motor index (0-4 for M1-M5)
- *
- * Note: This toggles the STEP pin. Call twice for a complete pulse,
- * or use stepperPulse() for a complete high-low sequence.
- */
+/// Toggle STEP pin for a specific motor (see mcp23017.h for full docs)
 void stepperToggleStep(uint8_t motorIndex) {
   if (motorIndex >= 5)
     return;
@@ -281,12 +277,15 @@ void stepperPulse(uint8_t motorIndex) {
 }
 
 /**
- * @brief Generate step pulses for multiple motors with a single I2C transaction
- * pair
+ * @details This is the key I2C optimization for multi-motor stepper control.
+ * Instead of calling stepperPulse() per motor (2 I2C writes each = 8 total
+ * for 4 motors), this function:
+ *   1. ORs the stepMask onto Port B (1 I2C write: sets all STEP bits HIGH)
+ *   2. Waits 2us (TMC2209 minimum pulse width is 100ns, extra margin)
+ *   3. ANDs off the stepMask (1 I2C write: clears STEP bits, keeps DIR)
  *
- * This is the key optimization for I2C-based stepper control.
- * Instead of 2 I2C writes per motor (8 writes for 4 motors), we do just 2
- * total.
+ * Result: ALL 4 motors step simultaneously with only 2 I2C transactions.
+ * Saves ~300us per Core 1 update cycle at 400kHz I2C.
  */
 void stepperPulseBatchPortB(uint8_t stepMask) {
   if (stepMask == 0)
@@ -297,7 +296,7 @@ void stepperPulseBatchPortB(uint8_t stepMask) {
   mcpStepper.setPortB(portB | stepMask);
 
   // Brief delay for pulse width (TMC2209 minimum is 100ns, we use 2us for
-  // safety)
+  // safety margin)
   sleep_us(2);
 
   // Clear all STEP bits (keep direction bits as they were)
@@ -305,11 +304,13 @@ void stepperPulseBatchPortB(uint8_t stepMask) {
 }
 
 /**
- * @brief Set direction bits for multiple motors efficiently
+ * @details Uses bitwise OR to set forward bits and AND to clear reverse bits,
+ * then writes the combined result to Port B in a single I2C transaction.
+ * Bits not present in either mask remain unchanged.
  */
 void stepperSetDirectionBatch(uint8_t setHighMask, uint8_t setLowMask) {
   uint8_t portB = mcpStepper.getPortB();
-  portB |= setHighMask; // Set HIGH bits
-  portB &= ~setLowMask; // Clear LOW bits
+  portB |= setHighMask; // Set forward direction bits
+  portB &= ~setLowMask; // Clear reverse direction bits
   mcpStepper.setPortB(portB);
 }

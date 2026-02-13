@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file motor_stepper.cpp
  * @brief Stepper motor control with trapezoidal acceleration (Core 0 version)
  *
@@ -6,23 +6,23 @@
  *   Instead of jumping instantly to the target speed (which causes missed
  *   steps and motor stall), this module ramps speed linearly:
  *
- *     Speed │    ╱‾‾‾‾‾‾‾╲
- *           │   ╱  cruise  ╲
- *           │  ╱             ╲
- *     0 ────┼─╱───────────────╲──► Time
- *           │ accel    decel
+ *     Speed |    /-------\
+ *           |   /  cruise  \
+ *           |  /             \
+ *     0 ----+-/---------------\--> Time
+ *           | accel    decel
  *
  *   The acceleration rate is set by STEPPER_ACCELERATION in project_config.h.
  *
  * NOTE: This is the OBJECT-ORIENTED stepper class used by motor_manager.
- *   There is also simple_stepper.cpp — a lightweight procedural version
+ *   There is also simple_stepper.cpp, a lightweight procedural version
  *   that runs on Core 1 with batch I2C writes. In the current architecture,
  *   simple_stepper is the one actually generating pulses at runtime.
  *   This class is retained as the full-featured alternative for position
  *   mode, homing, and per-motor acceleration if needed in the future.
  *
  * MCP23017:
- *   Step/dir pins are NOT on Pico GPIO — they're on an MCP23017 I2C GPIO
+ *   Step/dir pins are NOT on Pico GPIO; they're on an MCP23017 I2C GPIO
  *   expander. Each stepperPulse() call involves 2 I2C writes (set high, set
  * low).
  */
@@ -38,6 +38,10 @@
 // CONSTRUCTOR
 // =============================================================================
 
+/**
+ * @details Member initializer list sets all state to zero/safe defaults.
+ * No hardware access happens here; init() does that.
+ */
 MotorStepper::MotorStepper(const MotorStepperConfig &config)
     : cfg_(config), mode_(StepperMode::Velocity), currentPosition_(0),
       targetPosition_(0), targetSpeed_(0), currentSpeed_(0), lastStepTime_(0),
@@ -47,6 +51,12 @@ MotorStepper::MotorStepper(const MotorStepperConfig &config)
 // MOTOR BASE INTERFACE
 // =============================================================================
 
+/**
+ * @details For MechaPico MCB: the MCP23017 I2C expander is initialized globally
+ * in motors_init() before any motor's init() is called. This function only
+ * validates that the motor index is within the MCP23017's range (0-4 for M1-M5)
+ * and resets the step timing to prevent a burst of steps on first motion.
+ */
 bool MotorStepper::init() {
   if (!cfg_.enabled) {
     return true;
@@ -74,6 +84,11 @@ bool MotorStepper::init() {
   return true;
 }
 
+/**
+ * @details Zeroes both target and current speed immediately (no ramping).
+ * Position is intentionally preserved so the motor "knows" where it
+ * stopped for future position-mode moves.
+ */
 void MotorStepper::stop() {
   targetSpeed_ = 0;
   currentSpeed_ = 0;
@@ -83,6 +98,22 @@ void MotorStepper::stop() {
   // Keep current position (don't reset)
 }
 
+/**
+ * @details Main control loop, called at ~50Hz from main loop.
+ *
+ * TWO-PHASE UPDATE:
+ * Phase 1 (Acceleration): Ramps currentSpeed toward targetSpeed using
+ *   the configured acceleration rate. In position mode, it also computes
+ *   deceleration distance using v^2 = 2*a*d to know when to start slowing.
+ *
+ * Phase 2 (Step generation): Converts speed to a step interval in
+ *   microseconds and generates step pulses via MCP23017. A while-loop
+ *   catches up on missed steps if the update is late (e.g., dtSec > 1/speed).
+ *   A safety limit of 200 steps per update prevents runaway in error cases.
+ *
+ * KEY DETAIL: lastStepTime_ is incremented by stepInterval_, NOT set
+ * to "now". This avoids accumulated timing drift at high speeds.
+ */
 void MotorStepper::update(float dtSec) {
   if (!cfg_.enabled) {
     return;
@@ -103,21 +134,22 @@ void MotorStepper::update(float dtSec) {
     if (stepsRemaining == 0) {
       targetSpeedAbs = 0;
     } else {
-      // Calculate deceleration distance
+      // Calculate deceleration distance using kinematic equation:
+      //   v^2 = 2 * a * d  =>  d = v^2 / (2*a)
       float decelDistance =
           (currentSpeed_ * currentSpeed_) / (2.0f * cfg_.acceleration);
 
       if (abs(stepsRemaining) <= decelDistance) {
-        // Start decelerating
+        // Close enough to target: start decelerating
         targetSpeedAbs = 0;
       } else {
-        // Accelerate or cruise
+        // Far from target: accelerate or cruise at max speed
         targetSpeedAbs = (stepsRemaining > 0) ? cfg_.maxSpeed : -cfg_.maxSpeed;
       }
     }
   }
 
-  // Ramp current speed toward target
+  // Ramp current speed toward target (trapezoidal profile)
   float speedDiff = targetSpeedAbs - currentSpeed_;
   float maxChange = cfg_.acceleration * dtSec;
 
@@ -140,7 +172,7 @@ void MotorStepper::update(float dtSec) {
   // ==========================================================================
 
   if (fabsf(currentSpeed_) < 1.0f) {
-    // Stopped - reset timing for clean start when motion resumes
+    // Stopped: reset timing for clean start when motion resumes
     stepInterval_ = 0;
     lastStepTime_ = micros(); // Reset to prevent stale delta on resume
     return;
@@ -154,15 +186,6 @@ void MotorStepper::update(float dtSec) {
   int stepsThisUpdate = 0;
   const int maxStepsPerUpdate = 200; // Safety limit
 
-  // Debug: check why steps aren't being generated
-  static unsigned long lastDebugPrint = 0;
-  if (cfg_.index == 0 &&
-      now - lastDebugPrint >= 500000) { // Every 500ms, motor 0 only
-    long delta = (long)(now - lastStepTime_);
-    Serial.printf("[M0 DBG] speed=%.1f interval=%lu delta=%ld\n", currentSpeed_,
-                  stepInterval_, delta);
-    lastDebugPrint = now;
-  }
 
   while (stepInterval_ > 0 && (now - lastStepTime_) >= stepInterval_) {
     generateStep();
@@ -170,24 +193,12 @@ void MotorStepper::update(float dtSec) {
     stepsThisUpdate++;
 
     if (stepsThisUpdate >= maxStepsPerUpdate) {
-      // Prevent runaway - reset timing
+      // Prevent runaway: reset timing baseline
       lastStepTime_ = now;
-      if (cfg_.index == 0) {
-        Serial.println("[M0 DBG] Hit maxStepsPerUpdate limit!");
-      }
       break;
     }
   }
 
-  // Debug: show steps generated
-  if (cfg_.index == 0 && stepsThisUpdate > 0 && now - lastDebugPrint < 500000) {
-    static unsigned long lastStepPrint = 0;
-    if (now - lastStepPrint >= 200000) { // Every 200ms
-      Serial.printf("[M0 DBG] Generated %d steps this update\n",
-                    stepsThisUpdate);
-      lastStepPrint = now;
-    }
-  }
 }
 
 uint8_t MotorStepper::getIndex() const { return cfg_.index; }
@@ -239,6 +250,13 @@ void MotorStepper::setHome() {
 // PRIVATE METHODS
 // =============================================================================
 
+/**
+ * @details Converts steps/sec to microseconds/step. At 1000 steps/sec,
+ * interval = 1,000,000 / 1000 = 1000us = 1ms between steps. The minimum
+ * interval clamp prevents the driver from receiving pulses faster than
+ * it can process (TMC2209 minimum pulse width is ~100ns, but I2C latency
+ * dominates at ~50us per step).
+ */
 void MotorStepper::calculateStepInterval() {
   if (fabsf(currentSpeed_) < 1.0f) {
     stepInterval_ = 0;
@@ -254,8 +272,17 @@ void MotorStepper::calculateStepInterval() {
   }
 }
 
+/**
+ * @details Sets direction (only on change, to save I2C bandwidth) then
+ * generates a step pulse via the MCP23017's stepperPulse() function.
+ *
+ * The direction inversion uses cfg_.direction: if the motor is physically
+ * mounted backwards (common on mecanum robots where left and right sides
+ * mirror each other), cfg_.direction = -1 inverts the mapping so
+ * "positive speed" always means "robot forward".
+ */
 void MotorStepper::generateStep() {
-  // Set direction via MCP23017 (only if changed - saves I2C bandwidth)
+  // Set direction via MCP23017 (only if changed: saves I2C bandwidth)
   bool forward =
       (currentSpeed_ >= 0) ? (cfg_.direction > 0) : (cfg_.direction < 0);
   if (forward != lastDirection_) {
@@ -263,10 +290,10 @@ void MotorStepper::generateStep() {
     lastDirection_ = forward;
   }
 
-  // Generate step pulse via MCP23017
+  // Generate step pulse via MCP23017 (2 I2C writes: HIGH then LOW)
   stepperPulse(cfg_.index);
 
-  // Update position
+  // Update position counter
   if (currentSpeed_ >= 0) {
     currentPosition_++;
   } else {

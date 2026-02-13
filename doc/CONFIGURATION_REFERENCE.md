@@ -48,7 +48,7 @@ All configuration for your Pico W robot lives in **one file**: [`project_config.
 
 **Good names:** `PicoBot_05`, `RC_Tank_1`, `MecaRover`, `MyRobotController`
 
-**Bad names:** `Steve`, `TestDevice`, `Board3` — these will appear at the bottom of the list
+**Bad names:** `Steve`, `TestDevice`, `Board3` (these will appear at the bottom of the list)
 
 ### How BLE Identity Works
 
@@ -61,7 +61,7 @@ CRC16(DEVICE_NAME + BLE_PASSKEY) → 2 bytes → last 2 octets of MAC address
 This means:
 - **Change the name or PIN → the MAC address changes**
 - Your phone sees a **"new device"** and you must re-pair
-- This is intentional — it allows running multiple Pico robots with unique identities
+- This is intentional; it allows running multiple Pico robots with unique identities
 - The static address prefix is always `C0:FF:EE:00:XX:YY`
 
 > [!WARNING]
@@ -74,12 +74,12 @@ This means:
 Uncomment **exactly one** motor driver define:
 
 ```cpp
-// DC Motor drivers — uncomment ONE:
+// DC Motor drivers, uncomment ONE:
 // #define MOTOR_DRIVER_DRV8871
 // #define MOTOR_DRIVER_DRV8833
 // #define MOTOR_DRIVER_L298N
 
-// Stepper drivers — uncomment ONE:
+// Stepper drivers, uncomment ONE:
 #define STEPPER_DRIVER_TMC2209
 // #define STEPPER_DRIVER_A4988
 // #define STEPPER_DRIVER_DRV8825
@@ -133,7 +133,7 @@ DRV8871 / DRV8833:          L298N:
 | **Best for** | Precision, quiet ops | Budget builds | Mid-range, high step |
 
 > [!TIP]
-> On the MechaPico MCB, stepper control signals go through an MCP23017 I2C expander — you do NOT wire STEP/DIR to Pico GPIO pins directly. See the [Wiring Guide](WIRING_GUIDE.md).
+> On the MechaPico MCB, stepper control signals go through an MCP23017 I2C expander. You do NOT wire STEP/DIR to Pico GPIO pins directly. See the [Wiring Guide](WIRING_GUIDE.md).
 
 ---
 
@@ -160,7 +160,7 @@ The app sends a `"vehicle"` field in each JSON command. The firmware uses this t
 | Profile | What it does | Vehicle types it handles |
 |---------|-------------|-------------------------|
 | **Mecanum** | Inverse kinematics → 4 independent wheel speeds | `mecanum` (primary), adaptable to others |
-| **Direct** | Maps aux channels directly to individual motors — no kinematics | Any (raw control) |
+| **Direct** | Maps aux channels directly to individual motors (no kinematics) | Any (raw control) |
 
 ---
 
@@ -191,7 +191,7 @@ These measurements feed into the Mecanum kinematics calculations. Accuracy direc
 
 ## GPIO Pin Assignments
 
-### DC Motors — DRV8871
+### DC Motors, DRV8871
 
 | Motor | GPIO A (PWM) | GPIO B (PWM) |
 |-------|:------------:|:------------:|
@@ -200,7 +200,7 @@ These measurements feed into the Mecanum kinematics calculations. Accuracy direc
 | Back-Left | GP6 | GP7 |
 | Back-Right | GP8 | GP9 |
 
-### DC Motors — DRV8833
+### DC Motors, DRV8833
 
 Two chips, each driving two motors:
 
@@ -211,7 +211,7 @@ Two chips, each driving two motors:
 | Back-Left (Chip 2 A) | GP6 | GP7 |
 | Back-Right (Chip 2 B) | GP8 | GP9 |
 
-### DC Motors — L298N
+### DC Motors, L298N
 
 Two modules, three pins per motor:
 
@@ -222,7 +222,7 @@ Two modules, three pins per motor:
 | Back-Left (Mod 2) | GP8 | GP9 | GP10 |
 | Back-Right (Mod 2) | GP11 | GP12 | GP13 |
 
-### Stepper Motors — via MCP23017
+### Stepper Motors, via MCP23017
 
 | Signal | Pin | Notes |
 |--------|-----|-------|
@@ -259,7 +259,7 @@ Max supported speed = 1,000,000 ÷ (STEPPER_PULSE_INTERVAL_US × 2)
 Default: 1,000,000 ÷ (500 × 2) = 1,000 steps/sec per motor at full resolution
 ```
 
-If you need higher speeds, reduce `STEPPER_PULSE_INTERVAL_US` — but keep it above ~100µs or I2C writes won't complete in time.
+If you need higher speeds, reduce `STEPPER_PULSE_INTERVAL_US`, but keep it above ~100µs or I2C writes won't complete in time.
 
 ---
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file motor_manager.cpp
  * @brief Motor initialization and management (hardware abstraction layer)
  *
@@ -11,10 +11,10 @@
  * allowing the rest of the firmware to use motor_set_speed() /
  * motors_stop_all() without knowing which hardware is underneath.
  *
- * ⚠️ I2C BUS OWNERSHIP (multicore safety):
+ * [!] I2C BUS OWNERSHIP (multicore safety):
  *   For stepper configs, the MCP23017 I2C bus is shared between cores.
  *   Core 0 initializes it here, but Core 1 owns it during runtime for
- *   step pulse generation. motors_stop_all() must NOT touch I2C directly —
+ *   step pulse generation. motors_stop_all() must NOT touch I2C directly;
  *   it signals Core 1 via shared memory (g_emergencyStop in main.cpp).
  */
 
@@ -46,6 +46,16 @@ static MotorStepper *stepperMotors[NUM_MOTORS];
 // INITIALIZATION
 // =============================================================================
 
+/**
+ * @details Uses compile-time #ifdef to select motor type from project_config.h.
+ * Only ONE motor type (DC or stepper) is active per build. This keeps the
+ * binary small and avoids runtime type-checking overhead.
+ *
+ * For steppers, the MCP23017 I2C GPIO expander must be initialized first,
+ * then microstepping pins are configured, then individual MotorStepper
+ * objects are created with pin index -1 (because step/dir pins are on the
+ * MCP23017, not Pico GPIO).
+ */
 bool motors_init() {
   Serial.println("[MotorManager] Initializing motors...");
 
@@ -242,12 +252,19 @@ void motors_update(float dtSec) {
   }
 }
 
+/**
+ * @details For DC motors, stop() is called directly (they use Pico GPIO
+ * PWM, no I2C contention risk). For steppers, this function does NOT touch
+ * the MCP23017 I2C bus because Core 1 owns it during runtime. Instead,
+ * the caller sets g_emergencyStop via mutex, and Core 1 picks it up in
+ * its next loop iteration.
+ */
 void motors_stop_all() {
   Serial.println("[MotorManager] >>> STOP ALL <<<");
 
-  // NOTE: Do NOT touch I2C here - Core 1 owns the I2C bus for steppers
-  // The emergency stop is signaled via shared memory in main.cpp
-  // Core 1 will handle stopping the motors safely
+  // NOTE: Do NOT touch I2C here for steppers. Core 1 owns the I2C bus.
+  // The emergency stop is signaled via g_emergencyStop in main.cpp.
+  // Core 1 will handle stopping the motors safely.
 
   // For DC motors only (they don't use I2C on this board)
 #if defined(MOTOR_DRIVER_DRV8871) || defined(MOTOR_DRIVER_DRV8833) ||          \

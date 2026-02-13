@@ -5,8 +5,8 @@
 1. [What This Covers](#what-this-covers)
 2. [MechaPico MCB Overview](#mechapico-mcb-overview)
 3. [I2C Bus Connections](#i2c-bus-connections)
-4. [MCP23017 U6_1 — Stepper Control (0x20)](#mcp23017-u6_1--stepper-control-0x20)
-5. [MCP23017 U6_2 — DC Motors & LEDs (0x21)](#mcp23017-u6_2--dc-motors--leds-0x21)
+4. [MCP23017 U6_1: Stepper Control (0x20)](#mcp23017-u6_1--stepper-control-0x20)
+5. [MCP23017 U6_2: DC Motors & LEDs (0x21)](#mcp23017-u6_2--dc-motors--leds-0x21)
 6. [DC Motor Wiring](#dc-motor-wiring)
 7. [Stepper Motor Wiring](#stepper-motor-wiring)
 8. [Power Distribution](#power-distribution)
@@ -16,7 +16,7 @@
 
 ## What This Covers
 
-This guide describes the physical wiring between the Raspberry Pi Pico W, the MCP23017 I2C GPIO expanders, motor drivers, and motors. If you're using the MechaPico MCB (custom PCB), most of these connections are pre-routed — this guide helps you understand what's connected where, or wire your own board from scratch.
+This guide describes the physical wiring between the Raspberry Pi Pico W, the MCP23017 I2C GPIO expanders, motor drivers, and motors. If you're using the MechaPico MCB (custom PCB), most of these connections are pre-routed. This guide helps you understand what's connected where, or wire your own board from scratch.
 
 ---
 
@@ -28,8 +28,8 @@ The MechaPico MCB routes all connections through two MCP23017 I2C GPIO expanders
                         ┌─────────────────────────────┐
                         │     Raspberry Pi Pico W     │
                         │                             │
-     ┌──────────────────┤  GP4 (SDA) ──── I2C0 SDA   │
-     │                  │  GP5 (SCL) ──── I2C0 SCL   │
+     ┌──────────────────┤  GP4 (SDA) ──── I2C0 SDA    │
+     │                  │  GP5 (SCL) ──── I2C0 SCL    │
      │                  │  GP22     ──── INT (opt)    │
      │                  │  LED_BUILTIN ─ Status LED   │
      │                  └─────────────────────────────┘
@@ -73,9 +73,9 @@ The MechaPico MCB routes all connections through two MCP23017 I2C GPIO expanders
 
 ---
 
-## MCP23017 U6_1 — Stepper Control (0x20)
+## MCP23017 U6_1: Stepper Control (0x20)
 
-### Port B — Motor Step/Dir Signals
+### Port B: Motor Step/Dir Signals
 
 All 4 primary stepper motors (M1-M4) are on Port B, which enables batch I2C writes.
 
@@ -90,14 +90,14 @@ All 4 primary stepper motors (M1-M4) are on Port B, which enables batch I2C writ
 | GPB6 | 6 | `STPR_M4_DIR` | M4 (Back-Right) | Direction |
 | GPB7 | 7 | `STPR_M4_STEP` | M4 (Back-Right) | Step pulse |
 
-### Port A — Motor 5 + Shared Controls
+### Port A: Motor 5 + Shared Controls
 
 | MCP Pin | Bit | Signal | Function | Notes |
 |:-------:|:---:|--------|----------|-------|
 | GPA0 | 0 | `LED_BAR_1` | LED bar segment 1 | Status indicator |
 | GPA1 | 1 | `STPR_M5_STEP` | Motor 5 step pulse | Spare motor |
 | GPA2 | 2 | `STPR_M5_DIR` | Motor 5 direction | Spare motor |
-| GPA3 | 3 | `STPR_ALL_EN` | Enable all steppers | **Active LOW** — pull LOW to enable |
+| GPA3 | 3 | `STPR_ALL_EN` | Enable all steppers | **Active LOW**, pull LOW to enable |
 | GPA4 | 4 | `STPR_ALL_MS1` | Microstepping bit 1 | See [Microstepping Reference](CONFIGURATION_REFERENCE.md#microstepping-reference) |
 | GPA5 | 5 | `STPR_ALL_MS2` | Microstepping bit 2 | See [Microstepping Reference](CONFIGURATION_REFERENCE.md#microstepping-reference) |
 | GPA6 | 6 | `STPR_ALL_SPRD` | SpreadCycle mode | TMC2209: HIGH = SpreadCycle (high torque) |
@@ -110,9 +110,9 @@ All 4 primary stepper motors (M1-M4) are on Port B, which enables batch I2C writ
 
 ---
 
-## MCP23017 U6_2 — DC Motors & LEDs (0x21)
+## MCP23017 U6_2: DC Motors & LEDs (0x21)
 
-### Port A — DC Motor Control & LED Bar
+### Port A: DC Motor Control & LED Bar
 
 | MCP Pin | Bit | Signal | Function |
 |:-------:|:---:|--------|----------|
@@ -125,7 +125,7 @@ All 4 primary stepper motors (M1-M4) are on Port B, which enables batch I2C writ
 | GPA6 | 6 | `LED_BAR_4` | LED bar segment 4 |
 | GPA7 | 7 | `LED_BAR_5` | LED bar segment 5 |
 
-### Port B — General Purpose 5V I/O
+### Port B: General Purpose 5V I/O
 
 | MCP Pin | Bit | Signal | Function |
 |:-------:|:---:|--------|----------|
@@ -231,7 +231,7 @@ All stepper drivers share these signals (all 5 motors affected simultaneously):
 
 | Signal | MCP Pin | Default | Purpose |
 |--------|:-------:|:-------:|---------|
-| Enable | GPA3 | LOW (enabled) | Active LOW — motors energized when LOW |
+| Enable | GPA3 | LOW (enabled) | Active LOW; motors energized when LOW |
 | MS1 | GPA4 | LOW | Microstepping bit 1 |
 | MS2 | GPA5 | LOW | Microstepping bit 2 |
 | SpreadCycle | GPA6 | HIGH | TMC2209: HIGH for high-torque mode |

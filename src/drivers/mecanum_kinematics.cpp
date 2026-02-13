@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file mecanum_kinematics.cpp
  * @brief Mecanum wheel inverse kinematics implementation
  *
@@ -7,7 +7,19 @@
  *   four wheels spin at different speeds/directions, the net force vectors
  *   combine to produce movement in any direction (omnidirectional).
  *
- * INVERSE KINEMATICS (desired motion → individual wheel speeds):
+ * COORDINATE SYSTEM (top view, front is up):
+ *
+ *    <──── +vx (right) ────>
+ *                          
+ *    [FL]───────────────[FR]    
+ *     │                     │    │  +vy
+ *     │      (center)       │    │  (forward)
+ *     │                     │    │
+ *    [BL]───────────────[BR]    
+ *
+ *              (CCW) +omega (CCW)
+ *
+ * INVERSE KINEMATICS (desired motion -> individual wheel speeds):
  *   Given desired robot velocity (vx, vy, omega):
  *     FL = vy + vx + omega     (front-left)
  *     FR = vy - vx - omega     (front-right)
@@ -21,21 +33,52 @@
  *
  * NORMALIZATION:
  *   Combined motions (e.g., forward + strafe + rotate) can produce wheel
- *   speeds exceeding ±100. We normalize by dividing all wheels by the max
+ *   speeds exceeding +/-100. We normalize by dividing all wheels by the max
  *   absolute value, then apply the speed multiplier. This preserves the
  *   motion direction while keeping all values in the valid range.
+ */
+
+/*
+ * VEHICLE LAYOUT (top view, front is up):
+ *
+ *         ┌──────── FRONT ────────┐
+ *         │                       │
+ *         │ M1 (FL)       M2 (FR) │
+ *         │                       │
+ *         │        [center]       │         +vy = forward
+ *         │                       │         +vx = right
+ *         │ M3 (BL)       M4 (BR) │         +omega = CCW
+ *         │                       │
+ *         └──────── REAR ─────────┘
+ *
+ * Mecanum roller orientations (top view):
+ *   FL: NE-SW      FR: NW-SE       (front pair makes a V)
+ *   BL: NW-SE      BR: NE-SW       (rear pair makes an inverted V)
  */
 
 #include "mecanum_kinematics.h"
 #include <math.h>
 
+/**
+ * @details MECANUM INVERSE KINEMATICS EQUATIONS:
+ *   FL = vy + vx + omega
+ *   FR = vy - vx - omega
+ *   BL = vy - vx + omega
+ *   BR = vy + vx - omega
+ *
+ * These come from resolving the 45-degree roller forces on each wheel.
+ * The sign pattern determines which wheel combination produces forward,
+ * strafe, or rotation. Combined motions (e.g., forward + strafe + rotate)
+ * can produce raw values exceeding +/-100. Normalization divides all
+ * values by the largest, preserving the motion direction while keeping
+ * all outputs in the valid range.
+ *
+ * The early-exit for all-zero inputs is an optimization: it avoids the
+ * normalization math (fabsf calls) when the robot should be stationary.
+ */
 void mecanum_calculate(float vx, float vy, float omega, float speedMultiplier,
                        WheelSpeeds *output) {
-  // NOTE: Deadzone filtering is handled by the Flutter app at input level
-  // NOTE: Deadzone filtering is handled by the Flutter app at input level
-  // This function does pure kinematics math only
-
-  // If all inputs are zero, output zero
+  // Early exit: if all inputs are zero, output zero directly
   if (vx == 0 && vy == 0 && omega == 0) {
     output->frontLeft = 0;
     output->frontRight = 0;

@@ -7,17 +7,17 @@
  * ============================================================================
  *
  * This is the ONLY file you need to edit for basic robot setup. It controls:
- *   1. DEVICE IDENTITY — Name and PIN (affects BLE MAC address!)
- *   2. MOTOR TYPE — Which motor driver IC your PCB uses
- *   3. MOTION PROFILE — How joystick inputs map to motor outputs
- *   4. VEHICLE GEOMETRY — Physical measurements of your robot chassis
- *   5. GPIO PINS — Which Pico GPIO pins connect to your motor driver
- *   6. STEPPER PARAMETERS — Speed limits, acceleration, microstepping
+ *   1. DEVICE IDENTITY: Name and PIN (affects BLE MAC address!)
+ *   2. MOTOR TYPE: Which motor driver IC your PCB uses
+ *   3. MOTION PROFILE: How joystick inputs map to motor outputs
+ *   4. VEHICLE GEOMETRY: Physical measurements of your robot chassis
+ *   5. GPIO PINS: Which Pico GPIO pins connect to your motor driver
+ *   6. STEPPER PARAMETERS: Speed limits, acceleration, microstepping
  *
- * IMPORTANT — DEVICE NAME & PIN AFFECT PAIRING:
+ * IMPORTANT: DEVICE NAME & PIN AFFECT PAIRING:
  *   The Pico W derives its BLE MAC address from hash(DEVICE_NAME +
  * BLE_PASSKEY). If you change EITHER value, the phone will see a "new device"
- * and you must re-pair. This is by design — see ble_controller.cpp for the full
+ * and you must re-pair. This is by design; see ble_controller.cpp for the full
  * rationale.
  *
  * HOW TO MEASURE VEHICLE GEOMETRY:
@@ -35,7 +35,7 @@
  * wheelbase) TRACK_WIDTH_HALF_MM = distance from center to left wheel (half of
  * track width)
  *
- * MICROSTEPPING TRUTH TABLES (TMC2209 vs A4988 — THEY ARE DIFFERENT!):
+ * MICROSTEPPING TRUTH TABLES (TMC2209 vs A4988, THEY ARE DIFFERENT!):
  *
  *   TMC2209:                    A4988 / DRV8825:
  *   MS1  MS2  Microsteps       MS1  MS2  MS3  Microsteps
@@ -56,7 +56,7 @@
 // BLE advertised name - CHANGE THIS TO RENAME YOUR ROBOT
 // TIP: Include a keyword the app recognizes so your robot appears at the
 //      top of the scan list: robot, rc, pico, mecanum, tank, meca, controller
-#define DEVICE_NAME "PicoBot_05"
+#define DEVICE_NAME "TimberBot_RC"
 
 // 6-digit pairing PIN (must match what you enter on the app)
 #define BLE_PASSKEY 123456
@@ -99,7 +99,7 @@
 
 // =============================================================================
 // GPIO PIN ASSIGNMENTS - DC MOTORS (DRV8871)
-// TODO: Update with actual GPIO when available
+// NOTE: Update these pin numbers to match your wiring
 // =============================================================================
 
 #ifdef MOTOR_DRIVER_DRV8871

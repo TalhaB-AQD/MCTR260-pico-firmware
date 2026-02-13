@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file ble_controller.cpp
  * @brief BLE GATT server implementation for Raspberry Pi Pico W
  *
@@ -7,7 +7,7 @@
  * ============================================================================
  *
  * Unlike ESP32 which uses NimBLE (event-driven, FreeRTOS tasks), the Pico W
- * uses BTstack — a single-threaded BLE stack that processes events in a
+ * uses BTstack, a single-threaded BLE stack that processes events in a
  * cooperative loop. All BLE callbacks execute on Core 0 in the main loop
  * context (no ISR or task preemption).
  *
@@ -17,7 +17,7 @@
  *   every time and require re-pairing. Instead, we derive a static random
  *   address from hash(DEVICE_NAME + BLE_PASSKEY) using CRC16-CCITT. This
  *   gives a deterministic address that only changes when the user changes
- *   their device name or PIN — which naturally requires re-pairing anyway.
+ *   their device name or PIN, which naturally requires re-pairing anyway.
  *
  * FIRST-WRITE HANDSHAKE:
  *   On iOS, a BLE connection is established at the link layer before the app
@@ -30,13 +30,13 @@
  *   BLE sends data in chunks (up to MTU size, typically 20-512 bytes).
  *   A JSON command may arrive in one or multiple BLE writes. We detect
  *   complete JSON two ways:
- *   1. Newline delimiter ('\n') — the Flutter app appends this
- *   2. Brace counting ({/}) — fallback if newline is missing
+ *   1. Newline delimiter ('\n'), which the Flutter app appends
+ *   2. Brace counting ({/}), used as a fallback if newline is missing
  *
- * ⚠️ HOT PATH WARNING:
+ * [!] HOT PATH WARNING:
  *   In gattWriteCallback(), avoid Serial.printf() on every received packet.
  *   Serial output takes ~8ms on Pico W, which at 50Hz command rate would
- *   consume 400ms/sec of Core 0 time — enough to stall BLE processing.
+ *   consume 400ms/sec of Core 0 time, enough to stall BLE processing.
  *
  * Based on ESP32 ble_gap.cpp patterns and BTstack API.
  */
@@ -70,6 +70,16 @@ extern "C" {
 
 /**
  * @brief CRC16-CCITT calculation (same polynomial as ESP32)
+ *
+ * @details This implements the same CRC16 algorithm as ESP-IDF's
+ * esp_crc16_le(). Using the same polynomial ensures that a Pico W and
+ * an ESP32 configured with the same DEVICE_NAME + BLE_PASSKEY will
+ * generate the same MAC address, allowing the Flutter app to treat
+ * them identically.
+ *
+ * The reversed polynomial 0xA001 is the bit-reversed form of 0x8005
+ * (standard CRC-16). The bit-reversal allows processing LSB-first
+ * without needing to reverse the input/output bytes.
  */
 static uint16_t crc16_le(uint16_t crc, const uint8_t *data, size_t len) {
   while (len--) {
@@ -116,9 +126,19 @@ static uint8_t s_randomAddr[6];
 // UUID CONVERSION HELPER
 // =============================================================================
 
+/**
+ * @brief Convert a UUID string to BTstack's 128-bit byte array.
+ *
+ * @details BTstack stores UUIDs in LITTLE-ENDIAN byte order, which is the
+ * reverse of how UUIDs are written as strings. This function parses the
+ * standard "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" format and stores bytes
+ * starting from index 15 (MSB of the string -> last byte of array).
+ *
+ * @param uuidStr  Standard UUID string with dashes.
+ * @param uuid128  Output: 16-byte array in little-endian order.
+ */
 static void uuid_string_to_bytes(const char *uuidStr, uint8_t *uuid128) {
   // Convert UUID string to 128-bit bytes (little-endian for BTstack)
-  // UUID format: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
   int idx = 15; // Start from end (little-endian)
   for (int i = 0; uuidStr[i] && idx >= 0; i++) {
     if (uuidStr[i] == '-')
@@ -151,7 +171,13 @@ static void uuid_string_to_bytes(const char *uuidStr, uint8_t *uuid128) {
 // =============================================================================
 
 /**
- * @brief Called when a BLE device connects
+ * @brief Called when a BLE device connects.
+ *
+ * @details Pairing is requested immediately on connection. On iOS, the
+ * system-level pairing dialog appears asking the user for the passkey.
+ * If the user cancels pairing, the connection remains but no data can
+ * be written (the characteristic requires authenticated encryption).
+ * The first-write flag tracks whether the app has actually sent data.
  */
 void deviceConnectedCallback(BLEStatus status, BLEDevice *device) {
   if (status == BLE_STATUS_OK) {
@@ -221,7 +247,16 @@ uint16_t gattReadCallback(uint16_t value_handle, uint8_t *buffer,
 }
 
 /**
- * @brief Called when client writes to a characteristic
+ * @brief Called when client writes to a characteristic (hot path).
+ *
+ * @details Incoming BLE data is accumulated in s_rxBuffer. Complete
+ * JSON commands are detected in two ways:
+ *   1. Newline ('\n'): the Flutter app appends one after each JSON object.
+ *   2. Brace counting: if no newline arrives but brace depth returns to 0,
+ *      the JSON is complete. This handles MTU fragmentation edge cases.
+ *
+ * @warning No Serial.printf() in this function. At 50Hz, each 8ms print
+ *          would consume 40% of Core 0's time budget.
  */
 int gattWriteCallback(uint16_t value_handle, uint8_t *buffer, uint16_t size) {
   // Check if writing to control characteristic
@@ -274,7 +309,16 @@ int gattWriteCallback(uint16_t value_handle, uint8_t *buffer, uint16_t size) {
 // =============================================================================
 
 /**
- * @brief Generate static random BLE address from device name and passkey
+ * @brief Generate a deterministic BLE Static Random Address.
+ *
+ * @details BLE Static Random Addresses have their top 2 bits set to 11
+ * (0xC0 mask on byte[0]). The remaining 46 bits are derived from the
+ * CRC16 hash, XORed with magic bytes (0xAA, 0x55, 0x33, 0x77) to
+ * spread the hash bits across all 6 address bytes. This ensures that
+ * similar device names produce visually distinct addresses.
+ *
+ * The address is stable across power cycles as long as DEVICE_NAME and
+ * BLE_PASSKEY don't change.
  */
 static void derive_random_address(uint8_t *addr) {
   char identity_str[64];
@@ -301,6 +345,17 @@ static void derive_random_address(uint8_t *addr) {
 // PUBLIC API
 // =============================================================================
 
+/**
+ * @details Initialization follows a strict 5-step sequence:
+ *   1. Derive deterministic MAC from DEVICE_NAME + BLE_PASSKEY.
+ *   2. Configure Security Manager: MITM protection + bonding + fixed passkey.
+ *   3. Register BTstack callbacks for connect/disconnect/read/write.
+ *   4. Build GATT database: control (write) + telemetry (read/notify) chars.
+ *   5. Call BTstack.setup() and start advertising.
+ *
+ * BTstack.setup() must be called LAST because it finalizes the ATT database.
+ * Adding characteristics after setup() will silently fail.
+ */
 void ble_init(CommandReceivedCallback onCommand,
               ConnectionStateCallback onConnection) {
   s_commandCallback = onCommand;
@@ -379,6 +434,12 @@ bool ble_is_connected(void) { return s_connected; }
 
 bool ble_first_write_received(void) { return s_firstWriteReceived; }
 
+/**
+ * @details Copies the JSON string into a static buffer for the GATT read
+ * callback to serve. The actual BLE notification is sent by BTstack's
+ * event loop. The 256-byte buffer limits telemetry to short JSON payloads
+ * (typical: {"battery":85,"rssi":-42} ~30 bytes).
+ */
 bool ble_send_telemetry(const char *jsonData) {
   if (!s_connected) {
     return false;

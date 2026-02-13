@@ -1,0 +1,19 @@
+var searchData=
+[
+  ['g_5femergencystop_0',['g_emergencyStop',['../main_8cpp.html#aea7ef8794b0879e305914ec5dd9df73a',1,'main.cpp']]],
+  ['g_5fspeedmutex_1',['g_speedMutex',['../main_8cpp.html#aed08c827a16be7a254edfa2284c35086',1,'g_speedMutex:&#160;main.cpp'],['../profile__mecanum_8cpp.html#aed08c827a16be7a254edfa2284c35086',1,'g_speedMutex:&#160;main.cpp']]],
+  ['g_5fspeedsupdated_2',['g_speedsUpdated',['../main_8cpp.html#a060a7217c0a07151a0d3ee8a3b87c0e2',1,'g_speedsUpdated:&#160;main.cpp'],['../profile__mecanum_8cpp.html#a060a7217c0a07151a0d3ee8a3b87c0e2',1,'g_speedsUpdated:&#160;main.cpp']]],
+  ['g_5ftargetspeeds_3',['g_targetSpeeds',['../main_8cpp.html#a8a71e41aa31103a47222592eb09bd98e',1,'g_targetSpeeds:&#160;main.cpp'],['../profile__mecanum_8cpp.html#a8a71e41aa31103a47222592eb09bd98e',1,'g_targetSpeeds:&#160;main.cpp']]],
+  ['gattreadcallback_4',['gattReadCallback',['../ble__controller_8cpp.html#a3ae6f53cfee660978a6283626d71c1aa',1,'ble_controller.cpp']]],
+  ['gattwritecallback_5',['gattWriteCallback',['../ble__controller_8cpp.html#a9353eeea91de2924a3ed54b9f351768c',1,'ble_controller.cpp']]],
+  ['getcurrentspeed_6',['getCurrentSpeed',['../class_motor_stepper.html#a7c0cfdfd8a208987c7f5b569eabd5070',1,'MotorStepper']]],
+  ['getdesireddirection_7',['getDesiredDirection',['../class_motor_stepper.html#a005919136aa40dd810b94e899d8bfa54',1,'MotorStepper']]],
+  ['getdirbit_8',['getDirBit',['../class_motor_stepper.html#a3e62ff2a198199d281955ea8411cd432',1,'MotorStepper']]],
+  ['getindex_9',['getIndex',['../class_motor_base.html#af20d68c69ec6f245e0516e1d6cf43070',1,'MotorBase::getIndex()'],['../class_motor_d_c.html#af1ecfc34cf467d5656c7394c8db2bd7c',1,'MotorDC::getIndex()'],['../class_motor_stepper.html#a7964e48a1ef56ebf68314a600afbf8c2',1,'MotorStepper::getIndex()']]],
+  ['getporta_10',['getPortA',['../class_m_c_p23017.html#af15eaaa40ad673a3ab53189e8dd8d20d',1,'MCP23017']]],
+  ['getportb_11',['getPortB',['../class_m_c_p23017.html#a26864d10389d69d508c5523ec54b5989',1,'MCP23017']]],
+  ['getposition_12',['getPosition',['../class_motor_stepper.html#ae4f29d8f79c8cbe5cad4fee862eb95e9',1,'MotorStepper']]],
+  ['getstepbit_13',['getStepBit',['../class_motor_stepper.html#a3892a012b25f49cefadd54859a8b744b',1,'MotorStepper']]],
+  ['gettarget_14',['getTarget',['../class_motor_d_c.html#adff5cb053febc5ffa4b483231d74dd0e',1,'MotorDC']]],
+  ['gettype_15',['getType',['../class_motor_base.html#a36ab38077bbf5122968237b1fd53b274',1,'MotorBase::getType()'],['../class_motor_d_c.html#a774381b6b21caee23577a89810d02b19',1,'MotorDC::getType()'],['../class_motor_stepper.html#a62d23014231bd8b49f0ebbcb181d0ab1',1,'MotorStepper::getType()']]]
+];

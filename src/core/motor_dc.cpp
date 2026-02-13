@@ -3,12 +3,12 @@
  * @brief DC motor control via H-bridge driver ICs
  *
  * SUPPORTED DRIVERS:
- *   DRV8871 / DRV8833 — 2-pin control (no separate enable)
+ *   DRV8871 / DRV8833, 2-pin control (no separate enable)
  *     Forward: pinA=PWM, pinB=LOW
  *     Reverse: pinA=LOW, pinB=PWM
  *     Braking: both LOW (coast) or both HIGH (brake)
  *
- *   L298N — 3-pin control (enable + 2 direction pins)
+ *   L298N, 3-pin control (enable + 2 direction pins)
  *     Forward: EN=PWM, IN1=HIGH, IN2=LOW
  *     Reverse: EN=PWM, IN1=LOW, IN2=HIGH
  *
@@ -40,6 +40,14 @@ MotorDC::MotorDC(const MotorDCConfig &config)
 // MOTOR BASE INTERFACE
 // =============================================================================
 
+/**
+ * @details Configures PWM outputs at 20kHz on the configured pins.
+ * 20kHz is above human hearing, so the motors don't emit an audible
+ * whine. Lower frequencies (~1-5kHz) cause audible motor noise.
+ *
+ * For DRV8871: only IN1 needs PWM (IN2 is digital direction).
+ * For DRV8833/L298N: both IN1 and IN2 need PWM for proportional control.
+ */
 bool MotorDC::init() {
   if (!cfg_.enabled) {
     return true; // Disabled motors always succeed
@@ -106,6 +114,12 @@ MotorType MotorDC::getType() const { return MotorType::DC; }
 // DC MOTOR SPECIFIC
 // =============================================================================
 
+/**
+ * @details The direction field in the config allows correcting for motors
+ * that are physically mounted backwards (mirror mounting on mecanum robots).
+ * Multiplying by direction flips the sign when direction = -1, so
+ * "positive PWM" always means "robot forward" regardless of wiring.
+ */
 void MotorDC::setTarget(int16_t pwm) {
   // Apply direction correction
   targetPWM_ = pwm * cfg_.direction;
@@ -119,6 +133,16 @@ void MotorDC::setTarget(int16_t pwm) {
 
 int16_t MotorDC::getTarget() const { return targetPWM_; }
 
+/**
+ * @details Writes the driver-specific pin pattern for the desired speed
+ * and direction. Each driver IC has different control logic:
+ *
+ * DRV8871/DRV8833: 2-pin control. Uses PWM on one pin and LOW on the other.
+ *   Forward: pinA=PWM, pinB=LOW. Reverse: pinA=LOW, pinB=PWM.
+ *
+ * L298N: 3-pin control. ENA pin gets PWM for speed, IN1/IN2 are digital
+ *   for direction. Forward: IN1=HIGH, IN2=LOW. Reverse: IN1=LOW, IN2=HIGH.
+ */
 void MotorDC::applyPWM(int16_t pwm) {
   if (!cfg_.enabled) {
     return;
