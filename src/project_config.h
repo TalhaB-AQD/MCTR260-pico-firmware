@@ -222,4 +222,32 @@
 // Telemetry update rate
 #define TELEMETRY_INTERVAL_MS 500
 
+// =============================================================================
+// AUXILIARY MOTOR 5 (Spare stepper on MCP23017 U6_1 Port A)
+// =============================================================================
+// Motor 5 (M5) is an extra stepper driven by Core 1's simple_stepper engine.
+// It runs at the same 500µs update rate as M1-M4 but writes to Port A
+// instead of Port B. Control it from the Flutter app's aux sliders.
+
+// #define ENABLE_MOTOR_5                // Uncomment to enable Motor 5
+// #define MOTOR_5_AUX_CHANNEL      0    // Which aux slider controls M5 (0-5)
+// #define MOTOR_5_MAX_SPEED     2000.0f // Max speed in steps/sec
+// #define MOTOR_5_DIR_INVERT       1    // 1 = normal, -1 = reverse
+
+// =============================================================================
+// AUXILIARY DC MOTORS (On/off direction via MCP23017 U6_2 Port A)
+// =============================================================================
+// DC Motors 3 and 4 are controlled via the MCP23017 at address 0x21.
+// These are ON/OFF direction control only (no speed control via I2C).
+// The aux slider sets direction: positive = forward, negative = reverse,
+// neutral (within deadzone) = motor off (both H-bridge pins LOW).
+
+// #define ENABLE_DC_MOTOR_3              // Uncomment to enable DC Motor 3
+// #define DC_MOTOR_3_AUX_CHANNEL    1    // Which aux slider controls it (0-5)
+// #define DC_MOTOR_3_DIR_INVERT     1    // 1 = normal, -1 = reverse
+
+// #define ENABLE_DC_MOTOR_4              // Uncomment to enable DC Motor 4
+// #define DC_MOTOR_4_AUX_CHANNEL    2    // Which aux slider controls it (0-5)
+// #define DC_MOTOR_4_DIR_INVERT     1    // 1 = normal, -1 = reverse
+
 #endif // PROJECT_CONFIG_H

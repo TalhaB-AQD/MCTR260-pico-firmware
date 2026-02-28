@@ -31,6 +31,12 @@
 #include "../project_config.h" // For STEPPER_* constants
 #include <Arduino.h>
 
+// Motor 5 step/dir bit definitions for Port A
+#ifdef ENABLE_MOTOR_5
+#define M5_STEP_BIT (1 << 1) // GPA1
+#define M5_DIR_BIT  (1 << 2) // GPA2
+#endif
+
 // Step/dir bit definitions for Port B
 #define M1_DIR 0x01
 #define M1_STEP 0x02
@@ -55,15 +61,23 @@ struct MotorState {
   float accumulator;  /**< Fractional step accumulator for timing. */
 };
 
+#ifdef ENABLE_MOTOR_5
+static MotorState motors[5] = {0};
+#else
 static MotorState motors[4] = {0};
+#endif
 
 /**
  * @brief Direction inversion array per motor.
  * @details Index matches motor number. -1 inverts a motor's direction.
  * FL and BL are inverted because they're mounted as mirror images of
- * FR and BR on a mecanum chassis.
+ * FR and BR on a mecanum chassis. M5 inversion is user-configured.
  */
+#ifdef ENABLE_MOTOR_5
+static const int8_t DIR_INVERT[5] = {-1, 1, -1, 1, MOTOR_5_DIR_INVERT};
+#else
 static const int8_t DIR_INVERT[4] = {-1, 1, -1, 1};
+#endif
 static unsigned long lastUpdateTime = 0;
 
 static bool motorsActive = false;
@@ -81,12 +95,20 @@ static const float ACCEL_PER_UPDATE =
  */
 void simple_stepper_init() {
   lastUpdateTime = micros();
-  for (int i = 0; i < 4; i++) {
+#ifdef ENABLE_MOTOR_5
+  int numMotors = 5;
+#else
+  int numMotors = 4;
+#endif
+  for (int i = 0; i < numMotors; i++) {
     motors[i].targetSpeed = 0;
     motors[i].currentSpeed = 0;
     motors[i].accumulator = 0;
   }
   Serial.println("[SimpleStepper] Init with acceleration ramping");
+#ifdef ENABLE_MOTOR_5
+  Serial.println("[SimpleStepper] Motor 5 (Port A) enabled");
+#endif
 }
 
 /**
@@ -97,8 +119,13 @@ void simple_stepper_init() {
  * at zero during the transition.
  */
 void simple_stepper_set_speed(uint8_t motor, float stepsPerSec) {
+#ifdef ENABLE_MOTOR_5
+  if (motor >= 5)
+    return;
+#else
   if (motor >= 4)
     return;
+#endif
 
   float newSpeed = stepsPerSec * DIR_INVERT[motor];
   float oldSpeed = motors[motor].targetSpeed;
@@ -240,7 +267,53 @@ void simple_stepper_update() {
     mcpStepper.setPortB(dirMask);             // I2C write 2: STEP LOW (done)
   }
 
+  // === MOTOR 5: Port A step/dir (separate from Port B batch) ===
+#ifdef ENABLE_MOTOR_5
+  {
+    MotorState &m5 = motors[4];
+    float target = m5.targetSpeed;
+    float current = m5.currentSpeed;
 
+    // Acceleration ramp
+    float diff = target - current;
+    if (fabsf(diff) > ACCEL_PER_UPDATE) {
+      current += (diff > 0) ? ACCEL_PER_UPDATE : -ACCEL_PER_UPDATE;
+    } else {
+      current = target;
+    }
+
+    // Zero-crossing guard
+    if (fabsf(target) < STEPPER_SPEED_DEADZONE) {
+      if ((m5.currentSpeed > 0 && current <= 0) ||
+          (m5.currentSpeed < 0 && current >= 0)) {
+        current = 0;
+      }
+    }
+
+    m5.currentSpeed = current;
+    float absSpeed = fabsf(current);
+
+    if (absSpeed >= STEPPER_SPEED_DEADZONE) {
+      // Set direction
+      mcpStepper.setBitA(M5_DIR_BIT, current > 0);
+
+      // Step accumulator
+      m5.accumulator += absSpeed * dt;
+      if (m5.accumulator >= 1.0f) {
+        m5.accumulator -= 1.0f;
+        if (m5.accumulator > 2.0f)
+          m5.accumulator = 0;
+
+        // Step pulse on Port A
+        mcpStepper.setBitA(M5_STEP_BIT, true);   // I2C write 3
+        delayMicroseconds(5);                     // TMC2209 min pulse
+        mcpStepper.setBitA(M5_STEP_BIT, false);  // I2C write 4
+      }
+    } else {
+      m5.accumulator = 0;
+    }
+  }
+#endif
 }
 
 /**
@@ -249,11 +322,20 @@ void simple_stepper_update() {
  * Called from Core 1 when it reads the g_emergencyStop flag.
  */
 void simple_stepper_stop_all() {
-  for (int i = 0; i < 4; i++) {
+#ifdef ENABLE_MOTOR_5
+  int numMotors = 5;
+#else
+  int numMotors = 4;
+#endif
+  for (int i = 0; i < numMotors; i++) {
     motors[i].targetSpeed = 0;
     motors[i].currentSpeed = 0;
     motors[i].accumulator = 0;
   }
-  mcpStepper.setPortB(0); // All pins LOW: no direction, no steps
+  mcpStepper.setPortB(0); // All Port B pins LOW: M1-M4 off
+#ifdef ENABLE_MOTOR_5
+  mcpStepper.setBitA(M5_STEP_BIT, false); // M5 step LOW
+  mcpStepper.setBitA(M5_DIR_BIT, false);  // M5 dir LOW
+#endif
   motorsActive = false;
 }

@@ -58,6 +58,9 @@
 
 // Profiles
 #include "profiles/profile_mecanum.h"
+#if defined(ENABLE_MOTOR_5) || defined(ENABLE_DC_MOTOR_3) || defined(ENABLE_DC_MOTOR_4)
+#include "profiles/profile_aux_motors.h"
+#endif
 
 // =============================================================================
 // INTER-CORE COMMUNICATION (shared between Core 0 and Core 1)
@@ -67,7 +70,11 @@
 mutex_t g_speedMutex;
 
 // Shared speed commands (written by Core 0, read by Core 1)
+#ifdef ENABLE_MOTOR_5
+volatile float g_targetSpeeds[5] = {0, 0, 0, 0, 0};
+#else
 volatile float g_targetSpeeds[4] = {0, 0, 0, 0};
+#endif
 volatile bool g_speedsUpdated = false;
 volatile bool g_emergencyStop = false;
 
@@ -137,6 +144,9 @@ void loop1() {
       for (int i = 0; i < 4; i++) {
         simple_stepper_set_speed(i, g_targetSpeeds[i]);
       }
+#ifdef ENABLE_MOTOR_5
+      simple_stepper_set_speed(4, g_targetSpeeds[4]);
+#endif
       g_speedsUpdated = false;
     }
     mutex_exit(&g_speedMutex);
@@ -186,12 +196,17 @@ void onBleCommand(const char *jsonData, uint16_t length) {
     return;
   }
 
-  // Route to the appropriate motion profile based on vehicle type
+  // Route to the main drive motion profile
   if (strcmp(cmd.vehicle, "mecanum") == 0) {
 #ifdef MOTION_PROFILE_MECANUM
     profile_mecanum_apply(&cmd);
 #endif
   }
+
+  // Route to auxiliary motors (Motor 5, DC Motors 3-4)
+#if defined(ENABLE_MOTOR_5) || defined(ENABLE_DC_MOTOR_3) || defined(ENABLE_DC_MOTOR_4)
+  profile_aux_motors_apply(&cmd);
+#endif
 }
 
 /**
@@ -225,6 +240,11 @@ void onBleConnectionChange(bool connected) {
 
     // Also stop DC motors directly on Core 0 (they don't use Core 1)
     motors_stop_all();
+
+#if defined(ENABLE_MOTOR_5) || defined(ENABLE_DC_MOTOR_3) || defined(ENABLE_DC_MOTOR_4)
+    // Stop auxiliary motors (DC motors on MCP23017 U6_2)
+    profile_aux_motors_stop();
+#endif
   }
 }
 
