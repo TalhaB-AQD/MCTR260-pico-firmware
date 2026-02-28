@@ -1,9 +1,0 @@
-var searchData=
-[
-  ['ble_5ffirst_5fwrite_5freceived_0',['ble_first_write_received',['../ble__controller_8cpp.html#abdb79e9562d5c731ccabdae773916d67',1,'ble_first_write_received(void):&#160;ble_controller.cpp'],['../ble__controller_8h.html#abdb79e9562d5c731ccabdae773916d67',1,'ble_first_write_received(void):&#160;ble_controller.cpp']]],
-  ['ble_5fget_5flast_5fcommand_5ftime_1',['ble_get_last_command_time',['../ble__controller_8cpp.html#aed91ff0e2d06919ed6a2a8dd116e3459',1,'ble_get_last_command_time(void):&#160;ble_controller.cpp'],['../ble__controller_8h.html#aed91ff0e2d06919ed6a2a8dd116e3459',1,'ble_get_last_command_time(void):&#160;ble_controller.cpp']]],
-  ['ble_5finit_2',['ble_init',['../ble__controller_8cpp.html#a2e2d26aac21ef3c09c5bc64613c2fbc8',1,'ble_init(CommandReceivedCallback onCommand, ConnectionStateCallback onConnection):&#160;ble_controller.cpp'],['../ble__controller_8h.html#a2e2d26aac21ef3c09c5bc64613c2fbc8',1,'ble_init(CommandReceivedCallback onCommand, ConnectionStateCallback onConnection):&#160;ble_controller.cpp']]],
-  ['ble_5fis_5fconnected_3',['ble_is_connected',['../ble__controller_8cpp.html#a52ad119ee59abb1a46e692d997522076',1,'ble_is_connected(void):&#160;ble_controller.cpp'],['../ble__controller_8h.html#a52ad119ee59abb1a46e692d997522076',1,'ble_is_connected(void):&#160;ble_controller.cpp']]],
-  ['ble_5fsend_5ftelemetry_4',['ble_send_telemetry',['../ble__controller_8cpp.html#ae98b991b844c2f2eb42a4f6287b04940',1,'ble_send_telemetry(const char *jsonData):&#160;ble_controller.cpp'],['../ble__controller_8h.html#ae98b991b844c2f2eb42a4f6287b04940',1,'ble_send_telemetry(const char *jsonData):&#160;ble_controller.cpp']]],
-  ['ble_5fupdate_5',['ble_update',['../ble__controller_8cpp.html#a52a85ce0bb233297cceec5b7a01986eb',1,'ble_update(void):&#160;ble_controller.cpp'],['../ble__controller_8h.html#a52a85ce0bb233297cceec5b7a01986eb',1,'ble_update(void):&#160;ble_controller.cpp']]]
-];
