@@ -66,7 +66,7 @@
 // =============================================================================
 
 // DC Motor drivers (uncomment ONE if using DC motors)
-// #define MOTOR_DRIVER_DRV8871      // Single H-bridge, 2 PWM pins per motor
+#define MOTOR_DRIVER_DRV8871      // Single H-bridge, 2 PWM pins per motor
 // #define MOTOR_DRIVER_DRV8833      // Dual H-bridge, 2 PWM pins per channel
 // #define MOTOR_DRIVER_L298N        // Dual H-bridge with enable pins
 
@@ -87,13 +87,13 @@
 // =============================================================================
 
 // Wheel radius in millimeters
-#define WHEEL_RADIUS_MM 50.0f
+#define WHEEL_RADIUS_MM 44.45f
 
 // Distance from center to front/back axle (half of wheelbase)
-#define WHEELBASE_HALF_MM 100.0f
+#define WHEELBASE_HALF_MM 48.5f
 
 // Distance from center to left/right wheel (half of track width)
-#define TRACK_WIDTH_HALF_MM 100.0f
+#define TRACK_WIDTH_HALF_MM 120.005f
 
 // NOTE: Joystick deadzone is handled by the Flutter app at input level
 
@@ -229,10 +229,12 @@
 // It runs at the same 500µs update rate as M1-M4 but writes to Port A
 // instead of Port B. Control it from the Flutter app's aux sliders.
 
-// #define ENABLE_MOTOR_5                // Uncomment to enable Motor 5
-// #define MOTOR_5_AUX_CHANNEL      0    // Which aux slider controls M5 (0-5)
-// #define MOTOR_5_MAX_SPEED     2000.0f // Max speed in steps/sec
-// #define MOTOR_5_DIR_INVERT       1    // 1 = normal, -1 = reverse
+
+#define ENABLE_MOTOR_5                // Uncomment to enable Motor 5
+#define MOTOR_5_AUX_CHANNEL      0    // Which aux slider controls M5 (0-5)
+#define MOTOR_5_MAX_SPEED     2000.0f // Max speed in steps/sec
+#define MOTOR_5_DIR_INVERT       1    // 1 = normal, -1 = reverse
+
 
 // =============================================================================
 // AUXILIARY DC MOTORS (On/off direction via MCP23017 U6_2 Port A)
@@ -242,9 +244,9 @@
 // The aux slider sets direction: positive = forward, negative = reverse,
 // neutral (within deadzone) = motor off (both H-bridge pins LOW).
 
-// #define ENABLE_DC_MOTOR_3              // Uncomment to enable DC Motor 3
-// #define DC_MOTOR_3_AUX_CHANNEL    1    // Which aux slider controls it (0-5)
-// #define DC_MOTOR_3_DIR_INVERT     1    // 1 = normal, -1 = reverse
+#define ENABLE_DC_MOTOR_3              // Uncomment to enable DC Motor 3
+#define DC_MOTOR_3_AUX_CHANNEL    1    // Which aux slider controls it (0-5)
+#define DC_MOTOR_3_DIR_INVERT     1    // 1 = normal, -1 = reverse
 
 // #define ENABLE_DC_MOTOR_4              // Uncomment to enable DC Motor 4
 // #define DC_MOTOR_4_AUX_CHANNEL    2    // Which aux slider controls it (0-5)
