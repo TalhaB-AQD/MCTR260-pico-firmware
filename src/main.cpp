@@ -58,6 +58,9 @@
 
 // Profiles
 #include "profiles/profile_mecanum.h"
+#ifdef MOTION_PROFILE_AUTONOMOUS
+#include "profiles/profile_autonomous.h"
+#endif
 #if defined(ENABLE_MOTOR_5) || defined(ENABLE_DC_MOTOR_3) || defined(ENABLE_DC_MOTOR_4)
 #include "profiles/profile_aux_motors.h"
 #endif
@@ -203,6 +206,11 @@ void onBleCommand(const char *jsonData, uint16_t length) {
 #endif
   }
 
+  // Route to autonomous profile (toggle-triggered, runs alongside manual)
+#ifdef MOTION_PROFILE_AUTONOMOUS
+  profile_autonomous_apply(&cmd);
+#endif
+
   // Route to auxiliary motors (Motor 5, DC Motors 3-4)
 #if defined(ENABLE_MOTOR_5) || defined(ENABLE_DC_MOTOR_3) || defined(ENABLE_DC_MOTOR_4)
   profile_aux_motors_apply(&cmd);
@@ -240,6 +248,10 @@ void onBleConnectionChange(bool connected) {
 
     // Also stop DC motors directly on Core 0 (they don't use Core 1)
     motors_stop_all();
+
+#ifdef MOTION_PROFILE_AUTONOMOUS
+    profile_autonomous_stop();
+#endif
 
 #if defined(ENABLE_MOTOR_5) || defined(ENABLE_DC_MOTOR_3) || defined(ENABLE_DC_MOTOR_4)
     // Stop auxiliary motors (DC motors on MCP23017 U6_2)

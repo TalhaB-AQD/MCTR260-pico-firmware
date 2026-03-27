@@ -79,7 +79,8 @@
 // MOTION PROFILES (Enable one or more)
 // =============================================================================
 
-#define MOTION_PROFILE_MECANUM // 4-wheel omnidirectional drive
+#define MOTION_PROFILE_MECANUM     // 4-wheel omnidirectional drive
+#define MOTION_PROFILE_AUTONOMOUS  // Mode 2: preplanned route navigation
 // #define MOTION_PROFILE_DIRECT    // Raw motor control via aux channels
 
 // =============================================================================
@@ -231,7 +232,7 @@
 
 
 #define ENABLE_MOTOR_5                // Uncomment to enable Motor 5
-#define MOTOR_5_AUX_CHANNEL      0    // Which aux slider controls M5 (0-5)
+#define MOTOR_5_AUX_CHANNEL      4    // Which aux slider controls M5 (0-5)
 #define MOTOR_5_MAX_SPEED     2000.0f // Max speed in steps/sec
 #define MOTOR_5_DIR_INVERT       1    // 1 = normal, -1 = reverse
 
@@ -245,7 +246,7 @@
 // neutral (within deadzone) = motor off (both H-bridge pins LOW).
 
 #define ENABLE_DC_MOTOR_3              // Uncomment to enable DC Motor 3
-#define DC_MOTOR_3_AUX_CHANNEL    1    // Which aux slider controls it (0-5)
+#define DC_MOTOR_3_AUX_CHANNEL    5    // Which aux slider controls it (0-5)
 #define DC_MOTOR_3_DIR_INVERT     1    // 1 = normal, -1 = reverse
 
 // #define ENABLE_DC_MOTOR_4              // Uncomment to enable DC Motor 4
